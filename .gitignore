@@ -1,0 +1,40 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+*.egg
+
+# Node.js
+node_modules/
+frontend/node_modules/
+
+# Frontend build
+frontend/dist/
+
+# Generated pipeline data (run data-pipeline/run_pipeline.py to regenerate)
+backend/data/raw/
+backend/data/intermediate/
+backend/data/clean/
+
+# Original game data (large binary / UTF-16 JSON, not versioned)
+backend/data/original/
+
+# Runtime user data
+backend/data/plans/
+
+# Output
+output/
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
