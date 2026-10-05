@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { Table, Input, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../../api'
+import { useLang, type TKey } from '../../i18n'
 import type { Extractor } from '../../types'
 
 const ACQUISITION_COLORS: Record<string, string> = {
@@ -11,14 +12,15 @@ const ACQUISITION_COLORS: Record<string, string> = {
   resource_well: 'purple',
 }
 
-const ACQUISITION_LABELS: Record<string, string> = {
-  miner: '광부',
-  oil_extractor: '원유 추출기',
-  water_extractor: '수원 추출기',
-  resource_well: '자원 정제기',
+const ACQUISITION_LABELS: Record<string, TKey> = {
+  miner: 'extractors.acq.miner',
+  oil_extractor: 'extractors.acq.oil_extractor',
+  water_extractor: 'extractors.acq.water_extractor',
+  resource_well: 'extractors.acq.resource_well',
 }
 
 export default function ExtractorsTab() {
+  const { t } = useLang()
   const [search, setSearch] = useState('')
 
   const { data: extractorMap = {}, isLoading } = useQuery({
@@ -45,9 +47,9 @@ export default function ExtractorsTab() {
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <span style={{ color: '#e8b84b', fontWeight: 700, fontSize: 16 }}>추출기 시설</span>
+        <span style={{ color: '#e8b84b', fontWeight: 700, fontSize: 16 }}>{t('extractors.title')}</span>
         <Input
-          placeholder="이름 검색..."
+          placeholder={t('extractors.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
@@ -63,24 +65,24 @@ export default function ExtractorsTab() {
         size="small"
         columns={[
           {
-            title: '이름',
+            title: t('common.name'),
             dataIndex: 'displayName',
             render: (name: string) => (
               <span style={{ color: '#ddd', fontWeight: 500 }}>{name}</span>
             ),
           },
           {
-            title: '유형',
+            title: t('extractors.type'),
             dataIndex: 'acquisitionType',
             width: 160,
-            render: (t: string) => (
-              <Tag color={ACQUISITION_COLORS[t] ?? 'default'}>
-                {ACQUISITION_LABELS[t] ?? t}
+            render: (type: string) => (
+              <Tag color={ACQUISITION_COLORS[type] ?? 'default'}>
+                {ACQUISITION_LABELS[type] ? t(ACQUISITION_LABELS[type]) : type}
               </Tag>
             ),
           },
           {
-            title: '기본 속도 (/min)',
+            title: t('extractors.baseRate'),
             dataIndex: 'baseRatePerMin',
             width: 140,
             align: 'right',
@@ -89,7 +91,7 @@ export default function ExtractorsTab() {
             ),
           },
           {
-            title: '소비 전력 (MW)',
+            title: t('extractors.powerConsumption'),
             dataIndex: 'powerConsumption',
             width: 140,
             align: 'right',

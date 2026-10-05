@@ -1,6 +1,7 @@
-import { Layout, Menu, Button, Space, message } from 'antd'
+import { Layout, Menu, Button, Space, Alert, message } from 'antd'
 import {
   AppstoreOutlined,
+  CheckCircleOutlined,
   ExperimentOutlined,
   HomeOutlined,
   PlayCircleOutlined,
@@ -8,7 +9,9 @@ import {
   ToolOutlined,
 } from '@ant-design/icons'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { usePipelineRun } from '../../api/admin'
+import { usePipelineRun, useValidate } from '../../api/admin'
+import LanguageSelect from '../../components/LanguageSelect'
+import { useLang } from '../../i18n'
 import ItemsTab from './ItemsTab'
 import RecipesTab from './RecipesTab'
 import BuildingsTab from './BuildingsTab'
@@ -19,6 +22,7 @@ const { Header, Content, Sider } = Layout
 type TabKey = 'items' | 'recipes' | 'buildings' | 'extractors'
 
 export default function AdminPage() {
+  const { t } = useLang()
   const location = useLocation()
   const navigate = useNavigate()
   const pathTab = location.pathname.split('/').pop()
@@ -29,14 +33,15 @@ export default function AdminPage() {
     : 'items'
 
   const pipelineRun = usePipelineRun()
+  const validate = useValidate()
 
   async function handlePipeline() {
     try {
       const result = await pipelineRun.mutateAsync()
-      if (result.ok) message.success('파이프라인 완료')
-      else message.error(`파이프라인 실패\n${result.stderr}`)
+      if (result.ok) message.success(t('admin.pipelineDone'))
+      else message.error(t('admin.pipelineFailed', { error: result.stderr }))
     } catch {
-      message.error('파이프라인 실행 오류')
+      message.error(t('admin.pipelineError'))
     }
   }
 
@@ -47,7 +52,12 @@ export default function AdminPage() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 24px',
+          flexWrap: 'wrap',          // 좁은 화면에서 버튼이 잘리지 않게 줄바꿈
+          rowGap: 8,
+          height: 'auto',
+          minHeight: 64,
+          lineHeight: 'normal',
+          padding: '8px 24px',
           background: '#0d0d1a',
           borderBottom: '1px solid #1e1e2e',
         }}
@@ -58,10 +68,16 @@ export default function AdminPage() {
             Satisfactory Admin
           </span>
         </Space>
-        <Space>
+        <Space wrap>
+          <LanguageSelect />
           <Link to="/">
             <Button icon={<HomeOutlined />} size="small">
-              계산기
+              {t('admin.calculator')}
+            </Button>
+          </Link>
+          <Link to="/setup">
+            <Button icon={<SettingOutlined />} size="small">
+              {t('setup.title')}
             </Button>
           </Link>
           <Button
@@ -70,10 +86,39 @@ export default function AdminPage() {
             loading={pipelineRun.isPending}
             onClick={handlePipeline}
           >
-            파이프라인 실행
+            {t('admin.runPipeline')}
+          </Button>
+          <Button
+            icon={<CheckCircleOutlined />}
+            size="small"
+            loading={validate.isFetching}
+            onClick={() => validate.refetch()}
+          >
+            {t('admin.runValidate')}
           </Button>
         </Space>
       </Header>
+
+      {/* 500 응답 본문(예외 문자열)은 화면에 내보내지 않음 */}
+      {validate.isError && <Alert type="warning" showIcon banner message={t('admin.validateError')} />}
+      {!validate.isError && validate.data && (
+        validate.data.valid
+          ? <Alert type="success" showIcon banner message={t('admin.validateOk', { count: validate.data.warnings.length })} />
+          : (
+            <Alert
+              type="error"
+              showIcon
+              banner
+              message={t('admin.validateFail', { count: validate.data.errors.length })}
+              description={
+                <>
+                  {validate.data.errors.slice(0, 5).map((e, i) => <div key={i}>✖ {e}</div>)}
+                  {validate.data.errors.length > 5 && <div>{t('admin.validateMore', { count: validate.data.errors.length - 5 })}</div>}
+                </>
+              }
+            />
+          )
+      )}
 
       <Layout>
         <Sider width={180} style={{ background: '#0d0d1a', borderRight: '1px solid #1e1e2e' }}>
@@ -83,10 +128,10 @@ export default function AdminPage() {
             style={{ background: 'transparent', borderRight: 'none', marginTop: 8 }}
             onClick={({ key }) => navigate(`/admin/${key}`)}
             items={[
-              { key: 'items', icon: <AppstoreOutlined />, label: '아이템' },
-              { key: 'recipes', icon: <ExperimentOutlined />, label: '레시피' },
-              { key: 'buildings', icon: <HomeOutlined />, label: '건물' },
-              { key: 'extractors', icon: <ToolOutlined />, label: '추출기' },
+              { key: 'items', icon: <AppstoreOutlined />, label: t('common.items') },
+              { key: 'recipes', icon: <ExperimentOutlined />, label: t('admin.recipes') },
+              { key: 'buildings', icon: <HomeOutlined />, label: t('common.buildings') },
+              { key: 'extractors', icon: <ToolOutlined />, label: t('admin.extractors') },
             ]}
           />
         </Sider>

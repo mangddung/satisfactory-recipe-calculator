@@ -12,6 +12,7 @@ import {
   Select,
   Tag,
   Checkbox,
+  Table,
 } from 'antd'
 import {
   SaveOutlined,
@@ -44,18 +45,10 @@ import type {
 } from '../../types'
 import ChainTree from '../../components/ChainTree'
 import ItemIcon from '../../components/ItemIcon'
+import LanguageSelect from '../../components/LanguageSelect'
+import { useLang } from '../../i18n'
+import { getCookie, setCookie } from '../../utils/cookie'
 import styles from './CalculatorPage.module.css'
-
-function setCookie(name: string, value: string) {
-  const exp = new Date()
-  exp.setFullYear(exp.getFullYear() + 1)
-  document.cookie = `${name}=${encodeURIComponent(value)};expires=${exp.toUTCString()};path=/`
-}
-
-function getCookie(name: string): string | null {
-  const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
-  return m ? decodeURIComponent(m[1]) : null
-}
 
 function aggregateBuildings(node: ChainNode, acc: Record<string, number> = {}): Record<string, number> {
   if (node.recipe) {
@@ -104,6 +97,7 @@ function collectRawDefaults(
 }
 
 export default function CalculatorPage() {
+  const { t } = useLang()
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [targetRate, setTargetRate] = useState<number>(60)
   const [recipeSelections, setRecipeSelections] = useState<Record<string, string>>({})
@@ -208,7 +202,7 @@ export default function CalculatorPage() {
   function runCalculate(payload: { itemId: string; targetRate: number; recipeSelections: Record<string, string> }) {
     calculateMutation.mutate(payload, {
       onSuccess: (data) => setResult(data),
-      onError: () => message.error('계산 실패'),
+      onError: () => message.error(t('calc.calculateFailed')),
     })
   }
 
@@ -250,11 +244,11 @@ export default function CalculatorPage() {
       { name: planName.trim(), itemId: selectedItemId, targetRate, recipeSelections },
       {
         onSuccess: () => {
-          message.success('플랜 저장됨')
+          message.success(t('calc.planSaved'))
           setSaveModalOpen(false)
           setPlanName('')
         },
-        onError: () => message.error('저장 실패'),
+        onError: () => message.error(t('calc.saveFailed')),
       },
     )
   }
@@ -316,12 +310,12 @@ export default function CalculatorPage() {
           <button className={styles.hamburger} onClick={() => setSidebarOpen((v) => !v)}>
             <MenuOutlined />
           </button>
-          {sidebarOpen && <span className={styles.sidebarTitle}>아이템</span>}
+          {sidebarOpen && <span className={styles.sidebarTitle}>{t('common.items')}</span>}
         </div>
         {sidebarOpen && (
           <>
             <Input
-              placeholder="검색..."
+              placeholder={t('calc.searchPlaceholder')}
               value={sidebarSearch}
               onChange={(e) => setSidebarSearch(e.target.value)}
               allowClear
@@ -338,7 +332,7 @@ export default function CalculatorPage() {
                 <Fragment key={tier}>
                   <div className={`${styles.tierHeader} ${idx === 0 ? styles.tierHeaderFirst : ''}`}>
                     {tier === 99 ? (
-                      <span className={styles.tierBadge}>기타</span>
+                      <span className={styles.tierBadge}>{t('calc.tierOther')}</span>
                     ) : (
                       <>Tier <span className={styles.tierBadge}>{tier}</span></>
                     )}
@@ -356,7 +350,7 @@ export default function CalculatorPage() {
                 </Fragment>
               ))}
               {!craftableLoading && filteredCraftable.length === 0 && (
-                <div style={{ color: '#555', fontSize: 12, padding: '12px 8px' }}>결과 없음</div>
+                <div style={{ color: '#555', fontSize: 12, padding: '12px 8px' }}>{t('calc.noResults')}</div>
               )}
             </div>
           </>
@@ -378,18 +372,19 @@ export default function CalculatorPage() {
             onChange={(e) => handleToggleFullChain(e.target.checked)}
             disabled={!selectedItemId}
           >
-            전체 레시피 보기
+            {t('calc.showFullChain')}
           </Checkbox>
           <Select
             value={conveyorLimitValue}
             onChange={setConveyorLimitValue}
             size="small"
             style={{ width: 170 }}
+            popupMatchSelectWidth={false}
             options={[
-              { value: 0, label: '컨베이어: 무제한' },
+              { value: 0, label: t('calc.conveyorUnlimited') },
               ...conveyorBelts.map((c) => ({
                 value: c.itemsPerMin,
-                label: `${c.displayName.replace('컨베이어 벨트 ', '')} — ${c.itemsPerMin}/min`,
+                label: `${c.displayName} — ${c.itemsPerMin}/min`,
               })),
             ]}
           />
@@ -403,21 +398,22 @@ export default function CalculatorPage() {
             />
           )}
           <Button icon={<SaveOutlined />} disabled={!result || !selectedItemId} onClick={() => setSaveModalOpen(true)}>
-            저장
+            {t('calc.save')}
           </Button>
           <Button icon={<FolderOpenOutlined />} onClick={() => setPlansModalOpen(true)}>
-            불러오기{plans.length > 0 ? ` (${plans.length})` : ''}
+            {t('calc.load')}{plans.length > 0 ? ` (${plans.length})` : ''}
           </Button>
+          <LanguageSelect />
         </div>
 
         {calculateMutation.isError && (
-          <Alert type="error" message="계산 중 오류가 발생했습니다." style={{ marginBottom: 8 }} />
+          <Alert type="error" message={t('calc.calculateError')} style={{ marginBottom: 8 }} />
         )}
 
         {/* 아이템 미선택 */}
         {!selectedItemId && (
           <div className={styles.placeholder}>
-            <Empty description="좌측에서 아이템을 선택하세요." />
+            <Empty description={t('calc.selectItem')} />
           </div>
         )}
 
@@ -435,7 +431,7 @@ export default function CalculatorPage() {
 
               {/* 생산량 입력 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0 4px' }}>
-                <span style={{ fontSize: 14, color: '#888' }}>생산량</span>
+                <span style={{ fontSize: 14, color: '#888' }}>{t('calc.targetRate')}</span>
                 <InputNumber
                   value={targetRate}
                   onChange={(v) => setTargetRate(v ?? 1)}
@@ -451,7 +447,7 @@ export default function CalculatorPage() {
                 <>
                   <div className={styles.statRow}>
                     <ThunderboltOutlined style={{ color: '#e8b84b' }} />
-                    <span style={{ color: '#ccc', flex: 1, fontSize: 14 }}>총 전력</span>
+                    <span style={{ color: '#ccc', flex: 1, fontSize: 14 }}>{t('calc.totalPower')}</span>
                     <span style={{ color: '#e8b84b', fontWeight: 700, fontSize: 14 }}>
                       {displayPowerMW.toFixed(1)} MW
                     </span>
@@ -459,7 +455,7 @@ export default function CalculatorPage() {
 
                   <Divider style={{ borderColor: '#1e1e30', margin: '10px 0' }} />
 
-                  <div className={styles.rawLabel}>건물</div>
+                  <div className={styles.rawLabel}>{t('common.buildings')}</div>
                   <div className={styles.summaryList}>
                     {buildingSummary.map((b) => (
                       <div key={b.id} className={styles.summaryRow}>
@@ -471,7 +467,7 @@ export default function CalculatorPage() {
 
                   <Divider style={{ borderColor: '#1e1e30', margin: '10px 0' }} />
 
-                  <div className={styles.rawLabel}>{showFullChain ? '원자재 (분당)' : '필요 재료 (분당)'}</div>
+                  <div className={styles.rawLabel}>{showFullChain ? t('calc.rawResources') : t('calc.requiredInputs')}</div>
                   <div className={styles.summaryList}>
                     {displayResources.map((r) => (
                       <div key={r.itemId} className={styles.summaryRow}>
@@ -508,10 +504,10 @@ export default function CalculatorPage() {
                     conveyorLimit={conveyorLimit}
                   />
                 ) : (
-                  <Empty description="레시피 데이터 로딩 중..." />
+                  <Empty description={t('calc.loadingRecipes')} />
                 )
               ) : (
-                <Empty description="계산 중..." />
+                <Empty description={t('calc.calculating')} />
               )}
             </div>
           </div>
@@ -520,16 +516,16 @@ export default function CalculatorPage() {
 
       {/* 저장 모달 */}
       <Modal
-        title="플랜 저장"
+        title={t('calc.savePlan')}
         open={saveModalOpen}
         onOk={handleSavePlan}
         onCancel={() => setSaveModalOpen(false)}
         confirmLoading={savePlanMutation.isPending}
-        okText="저장"
-        cancelText="취소"
+        okText={t('calc.save')}
+        cancelText={t('common.cancel')}
       >
         <Input
-          placeholder="플랜 이름 입력..."
+          placeholder={t('calc.planNamePlaceholder')}
           value={planName}
           onChange={(e) => setPlanName(e.target.value)}
           onPressEnter={handleSavePlan}
@@ -539,14 +535,14 @@ export default function CalculatorPage() {
 
       {/* 플랜 불러오기 모달 */}
       <Modal
-        title="저장된 플랜"
+        title={t('calc.savedPlans')}
         open={plansModalOpen}
         onCancel={() => setPlansModalOpen(false)}
         footer={null}
         width={520}
       >
         {plans.length === 0 ? (
-          <Empty description="저장된 플랜이 없습니다." />
+          <Empty description={t('calc.noPlans')} />
         ) : (
           <Table
             dataSource={plans}
@@ -554,20 +550,20 @@ export default function CalculatorPage() {
             size="small"
             pagination={false}
             columns={[
-              { dataIndex: 'name', title: '이름' },
-              { dataIndex: 'itemId', title: '아이템', render: (id) => itemMap[id]?.displayName ?? id },
+              { dataIndex: 'name', title: t('common.name') },
+              { dataIndex: 'itemId', title: t('calc.item'), render: (id) => itemMap[id]?.displayName ?? id },
               { dataIndex: 'targetRate', title: '/min', width: 70, align: 'right' },
               {
                 key: 'actions',
                 width: 100,
                 render: (_, plan: Plan) => (
                   <div style={{ display: 'flex', gap: 4 }}>
-                    <Button size="small" type="link" onClick={() => handleLoadPlan(plan)}>로드</Button>
+                    <Button size="small" type="link" onClick={() => handleLoadPlan(plan)}>{t('calc.loadPlan')}</Button>
                     <Button
                       size="small" type="link" danger
                       icon={<DeleteOutlined />}
                       loading={deletePlanMutation.isPending}
-                      onClick={() => deletePlanMutation.mutate(plan.id, { onSuccess: () => message.success('삭제됨') })}
+                      onClick={() => deletePlanMutation.mutate(plan.id, { onSuccess: () => message.success(t('calc.deleted')) })}
                     />
                   </div>
                 ),

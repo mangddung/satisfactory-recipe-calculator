@@ -70,6 +70,7 @@ export interface ItemDetail extends Item {
   slug: string
   description: string | null
   stackSize: number | null
+  rawHints: Record<string, unknown>
   usedInRecipes: { id: string; displayName: string }[]
   producedByRecipes: { id: string; displayName: string }[]
 }
@@ -86,8 +87,10 @@ export interface Extractor {
   id: string
   displayName: string
   acquisitionType: string
+  allowedResources: string[]   // 비어 있으면 acquisitionType 이 같은 자원 전부 (채굴기)
+  hasPurity: boolean           // 물 추출기는 순도 없음
   isFluid: boolean
-  baseRatePerMin: number
+  baseRatePerMin: number       // 0 = 직접 뽑지 않음 (자원정 가압기)
   powerConsumption: number
 }
 
@@ -121,6 +124,7 @@ export interface ChainNode {
   itemId: string
   targetRate: number
   recipe: Recipe | null
+  defaultRecipeId: string | null   // 선택 안 했을 때 쓰는 레시피
   buildingCount: number
   buildingCountCeil: number
   clockSpeed: number

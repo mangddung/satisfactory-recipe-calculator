@@ -21,6 +21,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   powerMW: number
   buildingName: string
   recipe: Recipe | null
+  defaultRecipeId: string | null
   altRecipes: Recipe[]
   byproductOutputs: { itemId: string; rate: number }[]
   onRecipeSelect: (itemId: string, recipeId: string) => void
@@ -28,6 +29,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   rawSettings: RawNodeSettings | null
   onRawSettingsChange: ((itemId: string, settings: RawNodeSettings) => void) | null
   itemAcquisition: string
+  isCycle: boolean   // 상위 단계와 같은 아이템이라 백엔드가 전개를 멈춘 노드
 }
 
 export type FlowNode = Node<FlowNodeData, FlowNodeType>
@@ -61,6 +63,7 @@ function traverse(
   nodes: FlowNode[],
   edges: Edge[],
   counter: Map<string, number>,
+  ancestors: Set<string>,
 ): string {
   const cnt = (counter.get(node.itemId) ?? 0) + 1
   counter.set(node.itemId, cnt)
@@ -88,6 +91,7 @@ function traverse(
       powerMW: node.powerMW,
       buildingName,
       recipe: node.recipe,
+      defaultRecipeId: node.defaultRecipeId ?? null,
       altRecipes: getAltRecipes(node.itemId, recipeMap),
       byproductOutputs: node.byproductOutputs,
       onRecipeSelect,
@@ -95,6 +99,7 @@ function traverse(
       rawSettings: rawNodeSettings[node.itemId] ?? null,
       onRawSettingsChange,
       itemAcquisition: item?.acquisition ?? 'miner',
+      isCycle: isRaw && ancestors.has(node.itemId),
     },
   })
 
@@ -112,12 +117,13 @@ function traverse(
     })
   }
 
+  const childAncestors = new Set(ancestors).add(node.itemId)
   for (const child of node.children) {
     traverse(
       child, nodeId, false,
       itemMap, buildingMap, recipeMap, onRecipeSelect,
       rawNodeSettings, onRawSettingsChange,
-      conveyorLimit, nodes, edges, counter,
+      conveyorLimit, nodes, edges, counter, childAncestors,
     )
   }
 
@@ -141,7 +147,12 @@ export function buildFlowGraph(
     chainRoot, null, true,
     itemMap, buildingMap, recipeMap, onRecipeSelect,
     rawNodeSettings, onRawSettingsChange,
-    conveyorLimit, mainNodes, mainEdges, new Map(),
+    conveyorLimit, mainNodes, mainEdges, new Map(), new Set(),
+  )
+
+  // 루트를 뺀 모든 노드 = 체인 어딘가의 재료
+  const chainIngredients = new Set(
+    mainNodes.filter((n) => n.type !== 'root').map((n) => n.data.itemId),
   )
 
   const g = new graphlib.Graph()
@@ -150,7 +161,7 @@ export function buildFlowGraph(
 
   for (const n of mainNodes) {
     const h = n.type === 'raw'
-      ? (n.data.extractorSuggestion ? RAW_H : RAW_H_SIMPLE)
+      ? (n.data.extractorSuggestion || n.data.isCycle ? RAW_H : RAW_H_SIMPLE)
       : NODE_H
     g.setNode(n.id, { width: NODE_W, height: h })
   }
@@ -163,9 +174,10 @@ export function buildFlowGraph(
   const positionedMain: FlowNode[] = mainNodes.map((n) => {
     const { x, y } = g.node(n.id)
     const h = n.type === 'raw'
-      ? (n.data.extractorSuggestion ? RAW_H : RAW_H_SIMPLE)
+      ? (n.data.extractorSuggestion || n.data.isCycle ? RAW_H : RAW_H_SIMPLE)
       : NODE_H
-    return { ...n, position: { x: x - NODE_W / 2, y: y - h / 2 } }
+    // initialWidth/Height: nodes가 제어 모드라 측정값이 userNode에 안 들어감 → 없으면 MiniMap이 노드를 안 그림
+    return { ...n, position: { x: x - NODE_W / 2, y: y - h / 2 }, initialWidth: NODE_W, initialHeight: h }
   })
 
   // 부산물 노드 — 부모 노드 위에 수동 배치
@@ -187,11 +199,14 @@ export function buildFlowGraph(
           x: n.position.x,
           y: n.position.y - BYPRODUCT_H - 12 - i * (BYPRODUCT_H + 8),
         },
+        initialWidth: 160,   // ByproductNode width
+        initialHeight: BYPRODUCT_H,
         data: {
           itemId: bp.itemId,
           displayName: bpItem?.displayName ?? bp.itemId,
           iconPath: bpItem?.iconPath ?? null,
           rate: bp.rate,
+          usedInChain: chainIngredients.has(bp.itemId),
         },
       })
       byproductEdges.push({

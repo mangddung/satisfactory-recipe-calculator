@@ -1,15 +1,16 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Modal, Tabs, Select, InputNumber, Button, Radio } from 'antd'
+import { Modal, Select, InputNumber, Button, Radio } from 'antd'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import ItemIcon from '../ItemIcon'
-import { computeSupply } from '../../utils/extractorUtils'
+import { canExtract, computeSupply, nodeSupply } from '../../utils/extractorUtils'
 import { useExtractors, useGameConstants } from '../../api/calculator'
+import { useLang, type TKey } from '../../i18n'
 import type { RawNodeSettings, NodeConfig, Purity } from '../../types'
 
-const PURITY_OPTIONS = [
-  { value: 'impure', label: '불순' },
-  { value: 'normal', label: '보통' },
-  { value: 'pure', label: '순수' },
+const PURITY_OPTIONS: { value: Purity; label: TKey }[] = [
+  { value: 'impure', label: 'purity.impure' },
+  { value: 'normal', label: 'purity.normal' },
+  { value: 'pure', label: 'purity.pure' },
 ]
 
 function fmtRate(r: number) {
@@ -35,6 +36,7 @@ export default function NodeSettingsModal({
   settings, acquisitionType,
   onConfirm, onClose,
 }: Props) {
+  const { t } = useLang()
   const { data: extractors = {} } = useExtractors()
   const { data: gameConstants } = useGameConstants()
   const purityMultipliers = gameConstants?.purityMultipliers ?? {}
@@ -48,9 +50,17 @@ export default function NodeSettingsModal({
   const availableExtractors = useMemo(
     () =>
       Object.values(extractors)
-        .filter((e) => e.acquisitionType === acquisitionType)
+        .filter((e) => e.baseRatePerMin > 0 && canExtract(e, itemId, acquisitionType))
         .sort((a, b) => a.baseRatePerMin - b.baseRatePerMin),
-    [extractors, acquisitionType],
+    [extractors, itemId, acquisitionType],
+  )
+
+  // 직접 뽑지 않고 추출기를 구동하는 건물 (자원정 가압기) — 같은 종류 추출기를 쓸 때 안내
+  const pressurizer = Object.values(extractors).find(
+    (e) => e.baseRatePerMin === 0 && canExtract(e, itemId, acquisitionType),
+  )
+  const needsPressurizer = draft.nodes.some(
+    (n) => extractors[n.extractorId]?.acquisitionType === pressurizer?.acquisitionType,
   )
 
   const defaultExtractorId =
@@ -97,24 +107,24 @@ export default function NodeSettingsModal({
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <ItemIcon iconPath={iconPath} size={20} />
-          <span>{displayName} 노드 설정</span>
+          <span>{t('nodeSettings.title', { name: displayName })}</span>
         </div>
       }
       open={open}
       onOk={() => onConfirm(itemId, draft)}
       onCancel={onClose}
-      okText="확인"
-      cancelText="취소"
+      okText={t('common.ok')}
+      cancelText={t('common.cancel')}
       width={580}
       styles={{
-        content: { background: '#0d0d1a', border: '1px solid #1e1e2e' },
+        container: { background: '#0d0d1a', border: '1px solid #1e1e2e' },
         header: { background: '#0d0d1a', borderBottom: '1px solid #1e1e2e' },
         footer: { background: '#0d0d1a', borderTop: '1px solid #1e1e2e' },
       }}
     >
       {/* 필요량 */}
       <div style={{ marginBottom: 12, fontSize: 12, color: '#888' }}>
-        필요 공급량: <span style={{ color: '#7ab8b8', fontWeight: 600 }}>{fmtRate(targetRate)}/min</span>
+        {t('nodeSettings.requiredSupply')} <span style={{ color: '#7ab8b8', fontWeight: 600 }}>{fmtRate(targetRate)}/min</span>
       </div>
 
       {/* 모드 전환 */}
@@ -125,27 +135,25 @@ export default function NodeSettingsModal({
         buttonStyle="solid"
         size="small"
       >
-        <Radio.Button value="nodes">노드별 설정</Radio.Button>
-        <Radio.Button value="manual">직접 입력</Radio.Button>
+        <Radio.Button value="nodes">{t('nodeSettings.modeNodes')}</Radio.Button>
+        <Radio.Button value="manual">{t('nodeSettings.modeManual')}</Radio.Button>
       </Radio.Group>
 
       {draft.mode === 'nodes' && (
         <>
           {/* 헤더 행 */}
           <div style={{ display: 'flex', fontSize: 10, color: '#666', marginBottom: 4, padding: '0 4px' }}>
-            <div style={{ flex: 3, ...cellStyle }}>채굴기 등급</div>
-            <div style={{ flex: 2, ...cellStyle }}>순도</div>
-            <div style={{ flex: 2, ...cellStyle }}>오버클럭</div>
-            <div style={{ flex: 2, textAlign: 'right', ...cellStyle }}>공급량</div>
+            <div style={{ flex: 3, ...cellStyle }}>{t('nodeSettings.extractorTier')}</div>
+            <div style={{ flex: 2, ...cellStyle }}>{t('nodeSettings.purity')}</div>
+            <div style={{ flex: 2, ...cellStyle }}>{t('nodeSettings.overclock')}</div>
+            <div style={{ flex: 2, textAlign: 'right', ...cellStyle }}>{t('nodeSettings.supply')}</div>
             <div style={{ width: 32 }} />
           </div>
 
           {/* 노드 행 목록 */}
           {draft.nodes.map((node, i) => {
             const ext = extractors[node.extractorId]
-            const rowSupply = ext
-              ? ext.baseRatePerMin * (purityMultipliers[node.purity] ?? 1) * (node.overclock / 100)
-              : 0
+            const rowSupply = ext ? nodeSupply(ext, node, purityMultipliers) : 0
             return (
               <div
                 key={i}
@@ -172,13 +180,17 @@ export default function NodeSettingsModal({
                   />
                 </div>
                 <div style={{ flex: 2, minWidth: 0 }}>
-                  <Select
-                    size="small"
-                    value={node.purity}
-                    onChange={(v) => updateNode(i, { purity: v as Purity })}
-                    style={{ width: '100%' }}
-                    options={PURITY_OPTIONS}
-                  />
+                  {ext && !ext.hasPurity ? (
+                    <div style={{ textAlign: 'center', color: '#555' }}>—</div>
+                  ) : (
+                    <Select
+                      size="small"
+                      value={node.purity}
+                      onChange={(v) => updateNode(i, { purity: v as Purity })}
+                      style={{ width: '100%' }}
+                      options={PURITY_OPTIONS.map((o) => ({ value: o.value, label: t(o.label) }))}
+                    />
+                  )}
                 </div>
                 <div style={{ flex: 2, minWidth: 0 }}>
                   <InputNumber
@@ -214,8 +226,14 @@ export default function NodeSettingsModal({
             style={{ marginTop: 4, marginBottom: 12 }}
             disabled={availableExtractors.length === 0}
           >
-            노드 추가
+            {t('nodeSettings.addNode')}
           </Button>
+
+          {pressurizer && needsPressurizer && (
+            <div style={{ marginBottom: 12, fontSize: 11, color: '#e8b84b' }}>
+              {t('nodeSettings.pressurizer', { name: pressurizer.displayName, power: pressurizer.powerConsumption })}
+            </div>
+          )}
 
           {/* 합계 */}
           <div style={{
@@ -227,7 +245,7 @@ export default function NodeSettingsModal({
             borderRadius: 6,
             padding: '6px 12px',
           }}>
-            <span style={{ fontSize: 12, color: '#aaa' }}>총 공급량</span>
+            <span style={{ fontSize: 12, color: '#aaa' }}>{t('nodeSettings.totalSupply')}</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: sufficient ? '#4caf50' : '#cc4444' }}>
               {fmtRate(totalSupply)}/min {sufficient ? '✓' : '✗'}
             </span>
@@ -237,7 +255,7 @@ export default function NodeSettingsModal({
 
       {draft.mode === 'manual' && (
         <div style={{ padding: '8px 0' }}>
-          <div style={{ marginBottom: 8, fontSize: 12, color: '#888' }}>공급 속도를 직접 입력하세요.</div>
+          <div style={{ marginBottom: 8, fontSize: 12, color: '#888' }}>{t('nodeSettings.manualHint')}</div>
           <InputNumber
             value={draft.manualRate ?? 0}
             onChange={(v) => setDraft((prev) => ({ ...prev, manualRate: v }))}
@@ -247,7 +265,9 @@ export default function NodeSettingsModal({
             style={{ width: 200 }}
           />
           <div style={{ marginTop: 8, fontSize: 11, color: sufficient ? '#4caf50' : '#cc4444' }}>
-            {sufficient ? `✓ 충분 (${fmtRate(totalSupply)}/min)` : `✗ 부족 (${fmtRate(totalSupply)}/min, 필요 ${fmtRate(targetRate)}/min)`}
+            {sufficient
+              ? t('nodeSettings.sufficient', { supply: fmtRate(totalSupply) })
+              : t('nodeSettings.insufficient', { supply: fmtRate(totalSupply), need: fmtRate(targetRate) })}
           </div>
         </div>
       )}

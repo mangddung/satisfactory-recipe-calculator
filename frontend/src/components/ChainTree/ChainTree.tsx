@@ -56,6 +56,7 @@ export default function ChainTree({
     <div style={{ width: '100%', height: '100%' }}>
       <ReactFlow
         key={`${chainResult.itemId}_${chainResult.targetRate}`}
+        colorMode="dark"
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -70,7 +71,8 @@ export default function ChainTree({
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="#1e1e2e" gap={20} />
+        {/* dark 기본 배경(#141414) 대신 기존 배경 유지 */}
+        <Background color="#1e1e2e" bgColor="transparent" gap={20} />
         <Controls showInteractive={false} />
         <MiniMap
           nodeColor={(n) => {

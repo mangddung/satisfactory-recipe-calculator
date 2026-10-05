@@ -1,6 +1,7 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Select } from 'antd'
 import ItemIcon from '../../ItemIcon'
+import { useLang } from '../../../i18n'
 import type { FlowNode } from '../flowUtils'
 
 function fmtNum(n: number): string {
@@ -14,6 +15,7 @@ interface Props extends NodeProps<FlowNode> {
 }
 
 export default function ProductionNode({ data, isRoot = false }: Props) {
+  const { t } = useLang()
   const borderColor = isRoot ? '#c89a30' : '#1e2e4a'
   const bgColor = isRoot ? '#140f00' : '#0b0b18'
   const headerColor = isRoot ? '#e8b84b' : '#c8d8e8'
@@ -59,7 +61,7 @@ export default function ProductionNode({ data, isRoot = false }: Props) {
 
       {/* 클럭 / 처리량 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#4a6a7a' }}>
-        <span>클럭 {fmtNum(data.clockSpeed)}%</span>
+        <span>{t('node.clock', { value: fmtNum(data.clockSpeed) })}</span>
         <span style={{ color: '#5a9090' }}>{fmtNum(data.targetRate)}/min</span>
       </div>
 
@@ -78,7 +80,10 @@ export default function ProductionNode({ data, isRoot = false }: Props) {
             value={data.recipe?.id}
             onChange={(v) => data.onRecipeSelect(data.itemId, v)}
             style={{ width: '100%' }}
-            options={data.altRecipes.map((r) => ({ value: r.id, label: r.displayName }))}
+            options={data.altRecipes.map((r) => ({
+              value: r.id,
+              label: r.id === data.defaultRecipeId ? t('node.defaultRecipe', { name: r.displayName }) : r.displayName,
+            }))}
           />
         </div>
       )}

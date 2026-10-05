@@ -3,7 +3,11 @@ import { Modal, Spin } from 'antd'
 import { useRecipes, useBuildings, useItems } from '../../api/admin'
 import { useCalculate } from '../../api/calculator'
 import ChainTree from '../../components/ChainTree'
-import type { Recipe } from '../../types'
+import { useLang } from '../../i18n'
+import type { Recipe, RawNodeSettings } from '../../types'
+
+// 관리자 체인 보기는 채굴 설정 없음. 렌더마다 새 객체면 ChainTree useMemo가 매번 다시 계산함
+const NO_RAW_SETTINGS: Record<string, RawNodeSettings> = {}
 
 interface Props {
   recipe: Recipe
@@ -11,6 +15,7 @@ interface Props {
 }
 
 export default function ChainModal({ recipe, onClose }: Props) {
+  const { t } = useLang()
   const [recipeSelections, setRecipeSelections] = useState<Record<string, string>>({})
 
   const { data: items = [] } = useItems()
@@ -60,7 +65,7 @@ export default function ChainModal({ recipe, onClose }: Props) {
 
   return (
     <Modal
-      title={`${recipe.displayName} — 재료 체인`}
+      title={t('chain.title', { name: recipe.displayName })}
       open
       onCancel={onClose}
       footer={null}
@@ -69,7 +74,7 @@ export default function ChainModal({ recipe, onClose }: Props) {
       styles={{ body: { height: '70vh', padding: '12px 8px', display: 'flex', flexDirection: 'column' } }}
     >
       <div style={{ marginBottom: 8, color: '#aaa', fontSize: 13, flexShrink: 0 }}>
-        {buildingNames} · {recipe.manufactoringDuration}초
+        {buildingNames} · {t('common.seconds', { value: recipe.manufactoringDuration })}
       </div>
       {calculateMutation.isPending && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -85,6 +90,9 @@ export default function ChainModal({ recipe, onClose }: Props) {
             recipeMap={recipeMap}
             recipeSelections={recipeSelections}
             onRecipeSelect={handleRecipeSelect}
+            rawNodeSettings={NO_RAW_SETTINGS}
+            onRawSettingsChange={() => {}}
+            conveyorLimit={Infinity}
           />
         </div>
       )}

@@ -5,6 +5,7 @@ import ItemIcon from '../../ItemIcon'
 import NodeSettingsModal from '../../NodeSettingsModal'
 import { computeSupply } from '../../../utils/extractorUtils'
 import { useExtractors, useGameConstants } from '../../../api/calculator'
+import { useLang } from '../../../i18n'
 import type { FlowNode } from '../flowUtils'
 
 function fmtRate(r: number): string {
@@ -19,6 +20,7 @@ function stopProp(e: React.PointerEvent) {
 }
 
 export default function RawNode({ data }: NodeProps<FlowNode>) {
+  const { t } = useLang()
   const [modalOpen, setModalOpen] = useState(false)
   const { data: extractors = {} } = useExtractors()
   const { data: gameConstants } = useGameConstants()
@@ -43,7 +45,7 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
     : null
 
   const acquisitionType = data.itemAcquisition ?? 'miner'
-  const borderColor = hasExtractor && supplyRate !== null && !sufficient ? '#7a2a2a' : '#1a3a1a'
+  const borderColor = data.isCycle || (hasExtractor && supplyRate !== null && !sufficient) ? '#7a2a2a' : '#1a3a1a'
 
   return (
     <>
@@ -82,11 +84,11 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
               </div>
             ) : extractorSuggestion ? (
               <div style={{ fontSize: 10, color: '#4a8a50', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
-                {extractorSuggestion.displayName}
+                {extractors[extractorSuggestion.extractorId]?.displayName ?? extractorSuggestion.displayName}
               </div>
             ) : null}
           </div>
-          {hasExtractor && (
+          {hasExtractor && rawSettings && (
             <div className="nodrag nopan" onPointerDown={stopProp}>
               <Button
                 type="text"
@@ -94,7 +96,7 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
                 style={{ color: '#e8b84b', padding: '0 4px', height: 22, fontSize: 11, lineHeight: '22px' }}
                 onClick={() => setModalOpen(true)}
               >
-                설정
+                {t('node.settings')}
               </Button>
             </div>
           )}
@@ -105,9 +107,9 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
           <>
             <div style={{ borderTop: '1px solid #182818', margin: '7px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-              <span style={{ color: '#4a5a4a' }}>필요 {fmtRate(data.targetRate)}/min</span>
+              <span style={{ color: '#4a5a4a' }}>{t('node.required', { rate: fmtRate(data.targetRate) })}</span>
               <span style={{ color: sufficient ? '#3a8a40' : '#aa3a3a', fontWeight: 700 }}>
-                공급 {fmtRate(supplyRate)}/min {sufficient ? '✓' : '✗'}
+                {t('node.supply', { rate: fmtRate(supplyRate) })} {sufficient ? '✓' : '✗'}
               </span>
             </div>
           </>
@@ -115,7 +117,13 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
 
         {!hasExtractor && (
           <div style={{ fontSize: 11, color: '#5a8888', marginTop: 5 }}>
-            필요 {fmtRate(data.targetRate)}/min
+            {t('node.required', { rate: fmtRate(data.targetRate) })}
+          </div>
+        )}
+
+        {data.isCycle && (
+          <div style={{ fontSize: 11, color: '#c0392b', marginTop: 3 }}>
+            {t('node.cycle')}
           </div>
         )}
       </div>

@@ -16,22 +16,35 @@ export function useItems(filter?: string) {
 
 export function useItemDetail(itemId: string | null) {
   return useQuery({
-    queryKey: ['admin', 'items', itemId],
+    // 'detail' 필수: 없으면 useItems() 키 ['admin','items',undefined]와 해시가 같아짐(undefined→null)
+    queryKey: ['admin', 'items', 'detail', itemId],
     queryFn: () => apiFetch<ItemDetail>(`/api/admin/items/${itemId}`),
     enabled: !!itemId,
   })
 }
 
+// 일괄 저장: 백엔드는 1건씩만 받음 → 순서대로 보내고, 목록은 끝난 뒤 한 번만 다시 불러옴
 export function useClassify() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { item_id: string; acquisition: string }) =>
-      apiFetch('/api/admin/classify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'items'] }),
+    mutationFn: async (entries: { item_id: string; acquisition: string }[]) => {
+      const saved: string[] = []
+      let failed = 0
+      for (const body of entries) {
+        try {
+          await apiFetch('/api/admin/classify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          saved.push(body.item_id)
+        } catch {
+          failed++
+        }
+      }
+      return { saved, failed }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['admin', 'items'] }),
   })
 }
 
@@ -88,6 +101,5 @@ export function useValidate() {
       apiFetch<{ valid: boolean; errors: string[]; warnings: string[] }>(
         '/api/admin/validate',
       ),
-    enabled: false,
   })
 }
