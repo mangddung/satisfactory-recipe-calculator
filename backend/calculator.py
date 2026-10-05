@@ -16,14 +16,21 @@ def _is_unpackage(recipe: dict) -> bool:
 
 
 def _find_primary_recipe(item_id: str, recipes: dict) -> dict | None:
-    for r in recipes.values():
-        if r.get('recipeType') != 'production':
-            continue
-        if _is_unpackage(r):
-            continue
-        if any(p['item'] == item_id for p in r.get('products', [])):
-            return r
-    return None
+    """기본 레시피: 대체 레시피(isAlternate)가 아닌 것 우선, 그중 클래스명이 아이템과 같은 것
+    (Desc_Rubber_C → Recipe_Rubber_C, Recipe_ResidualRubber_C 보다 우선). 이름 비교는 언어마다 달라서 클래스명 사용.
+    대체 레시피로만 만들 수 있는 아이템은 대체 레시피를 기본으로."""
+    candidates = [
+        r for r in recipes.values()
+        if r.get('recipeType') == 'production'
+        and not _is_unpackage(r)
+        and any(p['item'] == item_id for p in r.get('products', []))
+    ]
+    same_name = 'Recipe_' + item_id.removeprefix('Desc_')
+    return min(
+        candidates,
+        key=lambda r: (r.get('isAlternate', False), r.get('className') != same_name),
+        default=None,
+    )
 
 
 def _find_chain_recipe(item_id: str, recipe_selections: dict, recipes: dict) -> dict | None:
@@ -60,16 +67,22 @@ def _calc_rate(amount: float, duration: float) -> float | None:
     return (amount / duration) * 60
 
 
-def _extractor_suggestion(acquisition: str, target_rate: float, extractors: dict, purity_multipliers: dict) -> dict | None:
+def _can_extract(ext: dict, item_id: str, acquisition: str) -> bool:
+    """추출기가 이 자원을 뽑을 수 있는지: 게임 데이터의 허용 자원 목록, 목록이 없으면(채굴기) acquisitionType."""
+    allowed = ext.get('allowedResources')
+    return item_id in allowed if allowed else ext.get('acquisitionType') == acquisition
+
+
+def _extractor_suggestion(item_id: str, acquisition: str, target_rate: float, extractors: dict, purity_multipliers: dict) -> dict | None:
     """원자재 노드에 대해 순도별 필요 채굴기 수를 계산.
-    extractors 데이터의 acquisitionType 필드로 매칭, baseRatePerMin이 높은 순으로 우선.
+    이 자원을 뽑을 수 있는 추출기 중 baseRatePerMin이 높은 순으로 우선 (가압기처럼 직접 뽑지 않는 건 제외).
     """
     if not extractors or not acquisition:
         return None
 
     candidates = [
         ext for ext in extractors.values()
-        if ext.get('acquisitionType') == acquisition and ext.get('baseRatePerMin', 0) > 0
+        if _can_extract(ext, item_id, acquisition) and ext.get('baseRatePerMin', 0) > 0
     ]
     if not candidates:
         return None
@@ -124,8 +137,10 @@ def calculate(
     already_visited = item_id in visited
 
     recipe = None
+    default_recipe = None
     if not is_raw and not already_visited:
         recipe = _find_chain_recipe(item_id, recipe_selections, recipes)
+        default_recipe = _find_primary_recipe(item_id, recipes)
 
     building_count = 0.0
     building_count_ceil = 0
@@ -167,12 +182,13 @@ def calculate(
                     'rate': round(bp_rate * building_count, 4),
                 })
     elif is_raw:
-        extractor_suggestion = _extractor_suggestion(acquisition, target_rate, extractors, purity_multipliers)
+        extractor_suggestion = _extractor_suggestion(item_id, acquisition, target_rate, extractors, purity_multipliers)
 
     return {
         'itemId': item_id,
         'targetRate': round(target_rate, 4),
-        'recipe': recipe,
+        'recipe': {**recipe, 'id': recipe['className']} if recipe else None,  # 프론트 Recipe 타입은 id 로 구분
+        'defaultRecipeId': default_recipe['className'] if default_recipe else None,
         'buildingCount': round(building_count, 4),
         'buildingCountCeil': building_count_ceil,
         'clockSpeed': clock_speed,
