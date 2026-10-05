@@ -11,23 +11,34 @@ Flask 서버
   POST /api/admin/pipeline/run
 
 계산기 API:
+  GET  /api/languages
   GET  /api/items/craftable
   POST /api/calculate
   GET  /api/plans
   POST /api/plans
   DELETE /api/plans/<plan_id>
+
+초기 설정 API:
+  GET  /api/setup/status
+  POST /api/setup/run
+  GET  /api/setup/cleanup
+  POST /api/setup/cleanup
+
+모든 API는 ?lang=<언어코드> 로 이름(displayName/description) 언어 선택.
 """
 
+import functools
 import json
 import logging
 import os
 import subprocess
 import sys
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, render_template, request, send_file
+from flask import Flask, abort, jsonify, request, send_file
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -42,63 +53,43 @@ DATA_PIPELINE = ROOT / "data-pipeline"
 CLASSIFICATION_OVERRIDES = DATA_PIPELINE / "classification_overrides.json"
 PLANS_DIR = DATA_DIR / "plans"
 
-# 아이콘 디렉토리: 환경변수 SATISFACTORY_ICONS_DIR 또는 backend/data/original/icons/
-ICONS_DIR = Path(os.environ.get("SATISFACTORY_ICONS_DIR", DATA_DIR / "original" / "icons")).resolve()
+# 아이콘 디렉토리: 환경변수 SATISFACTORY_ICONS_DIR 또는 파이프라인 결과물 backend/data/clean/icons/
+ICONS_DIR = Path(os.environ.get("SATISFACTORY_ICONS_DIR", DATA_CLEAN / "icons")).resolve()
+I18N_DIR = DATA_CLEAN / "i18n"
+SETUP_FILE = DATA_CLEAN / "setup.json"  # 초기 설정 완료 표시 (파이프라인이 생성)
+GAME_DATA = ROOT / "game-data"          # 사용자가 넣는 원본 게임 데이터
 
 _icon_file_set: set[str] | None = None
 
 
 def _build_icon_set() -> set[str]:
-    """ICONS_DIR 전체를 한번 스캔해서 소문자 절대경로 집합 반환."""
+    """ICONS_DIR 전체를 한번 스캔해서 상대경로(소문자, /) 집합 반환."""
     result: set[str] = set()
     if ICONS_DIR.exists():
         for f in ICONS_DIR.rglob("*.png"):
-            result.add(str(f.resolve()).lower())
+            result.add(f.relative_to(ICONS_DIR).as_posix().lower())
     logger.info(f"아이콘 스캔 완료: {len(result)}개")
     return result
 
 
+_icon_set_stamp: float | None = None
+
+
 def _get_icon_set() -> set[str]:
-    global _icon_file_set
-    if _icon_file_set is None:
+    """스캔 캐시. 파이프라인은 실행마다 마지막에 setup.json 을 새로 쓰므로,
+    그 수정 시각이 바뀌면(호스트에서 직접 돌린 경우 포함) 다시 스캔."""
+    global _icon_file_set, _icon_set_stamp
+    stamp = SETUP_FILE.stat().st_mtime if SETUP_FILE.exists() else None
+    if _icon_file_set is None or stamp != _icon_set_stamp:
         _icon_file_set = _build_icon_set()
+        _icon_set_stamp = stamp
     return _icon_file_set
 
 
-def _building_icon_path(building_id: str) -> str | None:
-    """건물 ID → Buildable/Factory/{name}/UI/*.png 경로 도출.
-    선호도: *_256.png > 나머지 PNG
-    Build_GeneratorBiomass_Automated_C 처럼 _Automated 같은 suffix 있으면 제거도 시도.
-    """
-    factory_dir = ICONS_DIR / "Buildable" / "Factory"
-    base = building_id.removeprefix("Build_").removesuffix("_C")
-    # 후보 폴더명: 원본, 그리고 마지막 _Xxx 부분을 순서대로 제거
-    name_parts = base.split("_")
-    candidates = []
-    for i in range(len(name_parts), 0, -1):
-        candidates.append("_".join(name_parts[:i]))
-    for name in candidates:
-        folder = factory_dir / name / "UI"
-        if not folder.exists():
-            continue
-        pngs = list(folder.glob("*.png"))
-        if not pngs:
-            continue
-        prefer = [p for p in pngs if "256" in p.name] or pngs
-        chosen = prefer[0]
-        return str(chosen.relative_to(ICONS_DIR)).replace("\\", "/")
-    return None
-
-
 def _icon_exists(icon_path: str) -> bool:
-    """iconPath가 ICONS_DIR 안에 실제로 존재하는지 확인 (스캔 캐시 사용)."""
-    available = _get_icon_set()
-    parts = Path(icon_path).parts
-    for i in range(len(parts)):
-        candidate = (ICONS_DIR / Path(*parts[i:])).resolve()
-        if str(candidate).lower() in available:
-            return True
-    return False
+    """iconPath가 ICONS_DIR 안에 실제로 존재하는지 확인 (스캔 캐시 사용).
+    파이프라인이 아이콘을 ICONS_DIR/<iconPath> 에 그대로 복사하므로 정확한 경로만 본다."""
+    return icon_path.lower() in _get_icon_set()
 
 
 VALID_ACQUISITIONS = [
@@ -126,15 +117,40 @@ def _load_json(path: Path) -> dict:
         return json.load(f)
 
 
+def _languages() -> list[str]:
+    """파이프라인이 만든 언어 목록 (clean/i18n/<언어>.json)."""
+    return sorted(p.stem for p in I18N_DIR.glob("*.json")) if I18N_DIR.exists() else []
+
+
+def _default_language(languages: list[str]) -> str | None:
+    """초기 설정에서 고른 기본 언어 → 없으면 ko → 첫 언어."""
+    chosen = _load_json(SETUP_FILE).get("defaultLanguage")
+    if chosen in languages:
+        return chosen
+    return "ko" if "ko" in languages else (languages[0] if languages else None)
+
+
+def _localize(data: dict) -> dict:
+    """요청의 ?lang= 언어로 displayName/description 교체. 없거나 미지원 언어면 기본 언어."""
+    languages = _languages()
+    lang = request.args.get("lang")
+    if lang not in languages:  # 목록에 있는 값만 허용 → 경로 조작 불가
+        lang = _default_language(languages)
+    if not lang:
+        return data
+    names = _load_json(I18N_DIR / f"{lang}.json")
+    return {k: {**v, **names[k]} if k in names else v for k, v in data.items()}
+
+
 def _load_clean_data():
-    """clean 또는 intermediate 디렉토리에서 최신 데이터 로드."""
+    """clean 또는 intermediate 디렉토리에서 최신 데이터 로드 (요청 언어로 이름 교체)."""
     for data_dir in (DATA_CLEAN, DATA_INTERMEDIATE):
         items_path = data_dir / "items.json"
         if items_path.exists():
             return (
-                _load_json(data_dir / "items.json"),
-                _load_json(data_dir / "recipes.json"),
-                _load_json(data_dir / "buildings.json"),
+                _localize(_load_json(data_dir / "items.json")),
+                _localize(_load_json(data_dir / "recipes.json")),
+                _localize(_load_json(data_dir / "buildings.json")),
             )
     # 파이프라인 미실행 → raw 데이터 fallback
     raw_dir = DATA_DIR / "raw"
@@ -150,7 +166,7 @@ def _load_extractors() -> dict:
     for data_dir in (DATA_CLEAN, DATA_INTERMEDIATE, DATA_DIR / "raw"):
         path = data_dir / "extractors.json"
         if path.exists():
-            return _load_json(path)
+            return _localize(_load_json(path))
     return {}
 
 
@@ -159,7 +175,7 @@ def _load_conveyors() -> dict:
     for data_dir in (DATA_CLEAN, DATA_INTERMEDIATE, DATA_DIR / "raw"):
         path = data_dir / "conveyors.json"
         if path.exists():
-            return _load_json(path)
+            return _localize(_load_json(path))
     return {}
 
 
@@ -192,10 +208,12 @@ def api_items():
     """
     items, _, _ = _load_clean_data()
     filter_mode = request.args.get("filter", "")
+    # 저장된 수동 분류는 파이프라인 재실행 전에도 관리자 화면에 보이게 함
+    overrides = _load_classification_overrides()
 
     result = []
     for item_id, data in items.items():
-        acquisition = data.get("acquisition")
+        acquisition = overrides.get(item_id, data.get("acquisition"))
         if filter_mode == "unclassified" and acquisition not in (None, "unclassified"):
             continue
         icon = data.get("iconPath")
@@ -238,7 +256,7 @@ def api_item_detail(item_id: str):
         "stackSize": data.get("stackSize"),
         "isFluid": data.get("isFluid", False),
         "iconPath": icon if icon and _icon_exists(icon) else None,
-        "acquisition": data.get("acquisition"),
+        "acquisition": _load_classification_overrides().get(item_id, data.get("acquisition")),
         "producedBy": data.get("producedBy"),
         "rawHints": data.get("_rawHints", {}),
         "usedInRecipes": used_in,
@@ -248,17 +266,10 @@ def api_item_detail(item_id: str):
 
 @app.get("/api/admin/icons/<path:icon_path>")
 def api_icon(icon_path: str):
-    """게임에서 추출한 아이콘 PNG 서빙.
-    iconPath가 FactoryGame/Resource/Parts/Item/UI/icon.png 형태여도
-    실제 파일이 icons/Item/UI/icon.png에 있으면 찾아낸다.
-    """
-    parts = Path(icon_path).parts
-    for i in range(len(parts)):
-        candidate = (ICONS_DIR / Path(*parts[i:])).resolve()
-        if not str(candidate).startswith(str(ICONS_DIR)):
-            continue
-        if candidate.exists():
-            return send_file(candidate, mimetype="image/png")
+    """파이프라인이 추출한 아이콘 PNG 서빙 (ICONS_DIR/<iconPath>)."""
+    candidate = (ICONS_DIR / icon_path).resolve()
+    if candidate.is_relative_to(ICONS_DIR) and candidate.is_file():
+        return send_file(candidate, mimetype="image/png")
     abort(404)
 
 
@@ -292,7 +303,7 @@ def api_buildings():
             "buildingCategory": d.get("buildingCategory"),
             "powerConsumption": d.get("powerConsumption"),
             "somersloopSlots": d.get("somersloopSlots"),
-            "iconPath": _building_icon_path(bid),
+            "iconPath": d.get("iconPath") if _icon_exists(d.get("iconPath") or "") else None,
         }
         for bid, d in buildings.items()
     ]
@@ -322,7 +333,7 @@ def api_building_detail(building_id: str):
         "buildingCategory": data.get("buildingCategory"),
         "powerConsumption": data.get("powerConsumption"),
         "somersloopSlots": data.get("somersloopSlots"),
-        "iconPath": _building_icon_path(building_id),
+        "iconPath": data.get("iconPath") if _icon_exists(data.get("iconPath") or "") else None,
         "usedInRecipes": used_in,
     })
 
@@ -349,9 +360,9 @@ def api_validate():
             "errors": result.errors,
             "warnings": result.warnings,
         })
-    except Exception as e:
-        logger.exception("검증 실패")
-        return jsonify({"valid": False, "errors": [str(e)], "warnings": []}), 500
+    except Exception:
+        logger.exception("검증 실패")  # 상세는 서버 로그에만
+        return jsonify({"valid": False, "errors": ["validation failed"], "warnings": []}), 500
 
 
 @app.post("/api/admin/classify")
@@ -388,19 +399,48 @@ def api_classify_delete(item_id: str):
     return jsonify({"ok": True, "item_id": item_id})
 
 
+# ponytail: 프로세스 안 잠금. 워커 여러 개(gunicorn 등)로 돌리면 파일 잠금으로 바꿔야 함
+_busy = threading.Lock()
+
+
+def _exclusive(view):
+    """파이프라인 실행·game-data 정리는 한 번에 하나만 (같은 폴더에 쓰고 지움). 실행 중이면 409."""
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        if not _busy.acquire(blocking=False):
+            return jsonify({"ok": False, "error": "파이프라인 또는 정리가 이미 실행 중"}), 409
+        try:
+            return view(*args, **kwargs)
+        finally:
+            _busy.release()
+    return wrapper
+
+
+def _run_pipeline(args: list[str]) -> subprocess.CompletedProcess:
+    """run_pipeline.py 실행 (인자는 리스트로만 전달 — 셸 미사용). 끝나면 아이콘 캐시 초기화."""
+    global _icon_file_set
+    result = subprocess.run(
+        [sys.executable, str(DATA_PIPELINE / "run_pipeline.py"), *args],
+        capture_output=True, text=True, timeout=600,
+    )
+    _icon_file_set = None
+    return result
+
+
+def _setup_args() -> list[str]:
+    """초기 설정에서 고른 언어를 유지하는 파이프라인 인자."""
+    setup = _load_json(SETUP_FILE)
+    if not setup.get("languages"):
+        return []
+    return ["--languages", ",".join(setup["languages"]), "--default-language", setup["defaultLanguage"]]
+
+
 @app.post("/api/admin/pipeline/run")
+@_exclusive
 def api_pipeline_run():
-    """파이프라인 재실행 (백그라운드)."""
-    pipeline_script = DATA_PIPELINE / "run_pipeline.py"
-    if not pipeline_script.exists():
-        return jsonify({"error": "run_pipeline.py 없음"}), 404
+    """파이프라인 재실행 (초기 설정의 언어 선택 유지)."""
     try:
-        result = subprocess.run(
-            [sys.executable, str(pipeline_script)],
-            capture_output=True, text=True, timeout=120,
-        )
-        global _icon_file_set
-        _icon_file_set = None
+        result = _run_pipeline(_setup_args())
         return jsonify({
             "ok": result.returncode == 0,
             "returncode": result.returncode,
@@ -408,9 +448,135 @@ def api_pipeline_run():
             "stderr": result.stderr[-1000:],
         })
     except subprocess.TimeoutExpired:
-        return jsonify({"error": "파이프라인 타임아웃 (120초 초과)"}), 500
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "파이프라인 타임아웃 (600초 초과)"}), 500
+    except Exception:
+        logger.exception("파이프라인 실행 실패")  # 상세는 서버 로그에만
+        return jsonify({"error": "pipeline failed"}), 500
+
+
+# ── 초기 설정 (game-data → 언어 선택 → 아이콘 확인 → 정리) ────────────────
+
+def _language_files() -> dict[str, Path]:
+    if not GAME_DATA.exists():
+        return {}
+    return _import_pipeline_module("run_pipeline").find_language_files(GAME_DATA)
+
+
+def _public_setup() -> dict | None:
+    setup = _load_json(SETUP_FILE)
+    if not setup:
+        return None
+    return {k: v for k, v in setup.items() if k != "usedSources"}
+
+
+def _walk_files(directory: Path):
+    """하위 파일 DirEntry 순회. 심볼릭 링크는 따라가지도 반환하지도 않음 → game-data 밖으로 못 나감.
+    (Docker Desktop 바인드 마운트에서 pathlib.rglob + resolve 보다 수 배 빠름)"""
+    with os.scandir(directory) as it:
+        for entry in it:
+            if entry.is_dir(follow_symlinks=False):
+                yield from _walk_files(Path(entry.path))
+            elif entry.is_file(follow_symlinks=False):
+                yield entry
+
+
+def _unused_game_files() -> list[tuple[Path, int]]:
+    """game-data 안에서 마지막 파이프라인이 쓰지 않은 파일과 크기 (README 제외).
+    서버가 직접 계산 — 클라이언트 입력 없음."""
+    used = set(_load_json(SETUP_FILE).get("usedSources", []))
+    files = []
+    for entry in _walk_files(GAME_DATA):
+        path = Path(entry.path)
+        rel = path.relative_to(GAME_DATA).as_posix()
+        if rel != "README.md" and rel not in used:
+            files.append((path, entry.stat(follow_symlinks=False).st_size))
+    return files
+
+
+@app.get("/api/setup/status")
+def api_setup_status():
+    icon_source_found = GAME_DATA.exists() and any(
+        e.name.lower().endswith(".png") for e in _walk_files(GAME_DATA)  # 첫 png에서 멈춤
+    )
+    return jsonify({
+        "configured": SETUP_FILE.exists(),
+        "gameData": {
+            "languageFiles": [
+                {"code": code, "path": p.relative_to(GAME_DATA).as_posix(), "bytes": p.stat().st_size}
+                for code, p in sorted(_language_files().items())
+            ],
+            "iconSourceFound": icon_source_found,
+        },
+        "setup": _public_setup(),
+    })
+
+
+@app.post("/api/setup/run")
+@_exclusive
+def api_setup_run():
+    """Body: {"languages": ["ko", "en-US"], "defaultLanguage": "ko"} → 선택 언어로 파이프라인 실행."""
+    body = request.get_json(force=True, silent=True) or {}
+    languages = body.get("languages")
+    default_language = body.get("defaultLanguage")
+    available = _language_files()
+    if not isinstance(languages, list) or not languages or any(code not in available for code in languages):
+        return jsonify({"error": "languages는 game-data에 있는 언어 코드 목록이어야 함"}), 400
+    if default_language not in languages:
+        return jsonify({"error": "defaultLanguage는 languages 중 하나여야 함"}), 400
+    try:
+        result = _run_pipeline(["--languages", ",".join(languages), "--default-language", default_language])
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "파이프라인 타임아웃 (600초 초과)"}), 500
+    if result.returncode != 0:
+        logger.error(f"초기 설정 파이프라인 실패:\n{result.stderr[-3000:]}")
+        return jsonify({"ok": False, "error": "파이프라인 실패", "log": result.stderr[-1000:]}), 500
+    return jsonify({"ok": True, "setup": _public_setup()})
+
+
+@app.get("/api/setup/cleanup")
+def api_setup_cleanup_preview():
+    """정리하면 삭제될 game-data 파일 요약."""
+    if not SETUP_FILE.exists():
+        return jsonify({"error": "초기 설정(파이프라인) 먼저 실행 필요"}), 409
+    unused = dict(_unused_game_files())
+    lang_files = [
+        {"code": code, "path": p.relative_to(GAME_DATA).as_posix(), "bytes": unused[p]}
+        for code, p in sorted(_language_files().items()) if p in unused
+    ]
+    lang_paths = {GAME_DATA / f["path"] for f in lang_files}
+    pngs = [p for p in unused if p.suffix.lower() == ".png"]
+    other = sorted(p for p in unused if p.suffix.lower() != ".png" and p not in lang_paths)
+    return jsonify({
+        "languages": {"files": lang_files, "bytes": sum(f["bytes"] for f in lang_files)},
+        "pngs": {"count": len(pngs), "bytes": sum(unused[p] for p in pngs)},
+        "other": {
+            "count": len(other),
+            "bytes": sum(unused[p] for p in other),
+            "samples": [p.relative_to(GAME_DATA).as_posix() for p in other[:20]],
+        },
+        "totalCount": len(unused),
+        "totalBytes": sum(unused.values()),
+    })
+
+
+@app.post("/api/setup/cleanup")
+@_exclusive
+def api_setup_cleanup():
+    """Body: {"confirm": true} → 사용하지 않는 game-data 파일 삭제 후 빈 폴더 정리. 되돌릴 수 없음."""
+    body = request.get_json(force=True, silent=True) or {}
+    if body.get("confirm") is not True:
+        return jsonify({"error": "confirm: true 필요"}), 400
+    if not SETUP_FILE.exists():
+        return jsonify({"error": "초기 설정(파이프라인) 먼저 실행 필요"}), 409
+    files = _unused_game_files()
+    for path, _ in files:
+        path.unlink()
+    for dirpath, _, _ in sorted(os.walk(GAME_DATA), key=lambda w: len(Path(w[0]).parts), reverse=True):
+        if Path(dirpath) != GAME_DATA and not os.listdir(dirpath):
+            os.rmdir(dirpath)
+    deleted_bytes = sum(size for _, size in files)
+    logger.info(f"game-data 정리: {len(files)}개 파일 삭제 ({deleted_bytes} bytes)")
+    return jsonify({"deletedCount": len(files), "deletedBytes": deleted_bytes})
 
 
 # ── 공개 게임 데이터 API (계산기 클라이언트용) ─────────────────────────
@@ -469,6 +635,13 @@ def api_public_buildings():
 
 
 # ── 계산기 API ────────────────────────────────────────────────────────
+
+@app.get("/api/languages")
+def api_languages():
+    """게임 데이터 언어 목록 (파이프라인이 game-data의 언어 파일에서 추출한 것)."""
+    languages = _languages()
+    return jsonify({"languages": languages, "default": _default_language(languages)})
+
 
 @app.get("/api/extractors")
 def api_extractors():
@@ -587,14 +760,6 @@ def api_plans_delete(plan_id: str):
         abort(404)
     path.unlink()
     return jsonify({"ok": True, "id": plan_id})
-
-
-# ── 관리자 페이지 ──────────────────────────────────────────────────────
-
-@app.get("/admin")
-@app.get("/")
-def admin_page():
-    return render_template("admin.html")
 
 
 # ── 파이프라인 모듈 임포트 ──────────────────────────────────────────────

@@ -29,6 +29,7 @@ EXTRACTOR_NATIVECLASS_PATTERNS = [
     "FGBuildableResourceExtractor",
     "FGBuildableWaterPump",
     "FGBuildableFrackingExtractor",
+    "FGBuildableFrackingActivator",  # 자원정 가압기 (직접 채굴 안 함, 추출기에 전력 공급)
 ]
 
 CONVEYOR_NATIVECLASS_PATTERNS = [
@@ -117,7 +118,7 @@ def _is_conveyor_nativeclass(native_class: str) -> bool:
 
 def _extractor_acquisition_type(data: dict, native_class: str) -> str:
     """NativeClass + mExtractorTypeName + mAllowedResourceForms 으로 acquisition 타입 유도."""
-    if "FGBuildableFrackingExtractor" in native_class:
+    if "FGBuildableFracking" in native_class:  # 추출기 + 가압기
         return "resource_well"
     if "FGBuildableWaterPump" in native_class:
         return "water_extractor"
@@ -218,24 +219,15 @@ def _parse_power(data: dict) -> float:
 
 
 def _parse_slots(data: dict) -> int:
-    """소머슬롭 슬롯 수 추출 (필드명이 버전마다 다를 수 있음)."""
-    for field in ("mSomersloopSlotsAvailable", "mNumSomersloopSlots", "mMaxPotentialIncreasePerSomersloop"):
-        raw = data.get(field)
-        if raw is not None:
-            try:
-                return int(float(raw))
-            except (ValueError, TypeError):
-                continue
-    return 0
+    """소머슬롭 슬롯 수 추출 (게임 Docs 필드: mProductionShardSlotSize, 1.0 기준)."""
+    try:
+        return int(float(data.get("mProductionShardSlotSize", 0)))
+    except (ValueError, TypeError):
+        return 0
 
 
-def parse_docs(docs_path: str, output_dir: str) -> dict:
-    """Docs.json → items.json, recipes.json, buildings.json"""
-    docs_path = Path(docs_path)
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.info(f"Docs.json 로딩: {docs_path}")
+def load_docs(docs_path: str | Path) -> list:
+    """Docs.json / 언어별 파일(ko.json 등) 로드 → NativeClass 그룹 리스트. UTF-8/UTF-16 자동 처리."""
     for encoding in ("utf-8-sig", "utf-16", "utf-8"):
         try:
             with open(docs_path, "r", encoding=encoding) as f:
@@ -246,6 +238,42 @@ def parse_docs(docs_path: str, output_dir: str) -> dict:
     else:
         raise RuntimeError(f"파일 인코딩 감지 실패: {docs_path}")
 
+    if isinstance(docs_data, list):
+        return docs_data
+    if isinstance(docs_data, dict):
+        return (
+            docs_data.get("NativeClasses")
+            or docs_data.get("Data")
+            or next((v for v in docs_data.values() if isinstance(v, list)), [])
+        )
+    return []
+
+
+def extract_names(docs_path: str | Path, ids: set[str]) -> dict[str, dict]:
+    """언어 파일에서 ids에 해당하는 클래스의 표시 이름·설명만 추출."""
+    names: dict[str, dict] = {}
+    for group in load_docs(docs_path):
+        if not isinstance(group, dict):
+            continue
+        for cls in group.get("Classes", []):
+            class_id = cls.get("ClassName", "") if isinstance(cls, dict) else ""
+            if class_id in ids:
+                names[class_id] = {
+                    "displayName": _display_name(class_id, cls),
+                    "description": cls.get("mDescription", "").strip(),
+                }
+    return names
+
+
+def parse_docs(docs_path: str, output_dir: str) -> dict:
+    """Docs.json → items.json, recipes.json, buildings.json"""
+    docs_path = Path(docs_path)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Docs.json 로딩: {docs_path}")
+    native_classes = load_docs(docs_path)
+
     stats = {
         "total_items": 0,
         "total_recipes": 0,
@@ -253,18 +281,6 @@ def parse_docs(docs_path: str, output_dir: str) -> dict:
         "skipped_recipes": 0,
         "warnings": [],
     }
-
-    # ── Docs.json 구조 정규화 ──────────────────────────────────────────
-    if isinstance(docs_data, list):
-        native_classes = docs_data
-    elif isinstance(docs_data, dict):
-        native_classes = (
-            docs_data.get("NativeClasses")
-            or docs_data.get("Data")
-            or next((v for v in docs_data.values() if isinstance(v, list)), [])
-        )
-    else:
-        native_classes = []
 
     logger.info(f"NativeClass 그룹: {len(native_classes)}개")
 
@@ -276,6 +292,8 @@ def parse_docs(docs_path: str, output_dir: str) -> dict:
     building_raw: dict[str, tuple[dict, str]] = {}
     extractor_raw: dict[str, tuple[dict, str]] = {}  # class_id → (data, native_class)
     conveyor_raw: dict[str, dict] = {}
+    building_icons: dict[str, str | None] = {}  # Desc_X_C → 아이콘 (건물 아이콘은 Build_가 아닌 Desc_에 있음)
+    unlock_types: dict[str, set[str]] = {}  # Recipe_X_C → 해금하는 스키마틱 종류 (EST_Milestone, EST_MAM, EST_Alternate …)
 
     for group in native_classes:
         if not isinstance(group, dict):
@@ -309,10 +327,14 @@ def parse_docs(docs_path: str, output_dir: str) -> dict:
                 building_raw[class_id] = (cls, building_category)
             elif is_item and class_id.startswith("Desc_"):
                 item_raw[class_id] = (cls, native_class)
+            elif "FGBuildingDescriptor" in native_class and class_id.startswith("Desc_"):
+                building_icons[class_id] = _icon_path(cls)
             elif is_recipe and class_id.startswith("Recipe_"):
-                # 대체 레시피 제외
-                if not class_id.startswith("Recipe_Alternate_"):
-                    recipe_raw[class_id] = cls
+                recipe_raw[class_id] = cls
+            elif "FGSchematic" in native_class:
+                for unlock in cls.get("mUnlocks", []):
+                    for rid in re.findall(r"(\w+_C)'", str(unlock.get("mRecipes", ""))):
+                        unlock_types.setdefault(rid, set()).add(cls.get("mType", ""))
 
     logger.info(f"수집 → 아이템:{len(item_raw)}, 레시피:{len(recipe_raw)}, 건물:{len(building_raw)}, 채굴기:{len(extractor_raw)}, 컨베이어:{len(conveyor_raw)}")
 
@@ -320,7 +342,7 @@ def parse_docs(docs_path: str, output_dir: str) -> dict:
     extractors: dict[str, dict] = {}
     for class_id, (data, native_class) in extractor_raw.items():
         cycle_time = float(data.get("mExtractCycleTime", 1.0) or 1.0)
-        items_per_cycle = int(data.get("mItemsPerCycle", 1) or 1)
+        items_per_cycle = int(data.get("mItemsPerCycle", 0) or 0)  # 가압기는 필드 없음 → 0
         allowed_forms_raw = data.get("mAllowedResourceForms", "")
         is_fluid = any(f in str(allowed_forms_raw) for f in ("LIQUID", "GAS", "RF_LIQUID", "RF_GAS"))
 
@@ -334,6 +356,9 @@ def parse_docs(docs_path: str, output_dir: str) -> dict:
             "displayName": _display_name(class_id, data),
             "acquisitionType": _extractor_acquisition_type(data, native_class),
             "allowedForms": allowed_forms_raw,
+            # 뽑을 수 있는 자원 (비어 있으면 allowedForms 의 모든 자원, 예: 채굴기)
+            "allowedResources": re.findall(r"(\w+_C)'", str(data.get("mAllowedResources", ""))),
+            "hasPurity": "FGBuildableWaterPump" not in native_class,  # 물 추출기는 노드 없이 물 위에 설치
             "isFluid": is_fluid,
             "extractCycleTime": cycle_time,
             "itemsPerCycle": items_per_cycle,
@@ -371,6 +396,7 @@ def parse_docs(docs_path: str, output_dir: str) -> dict:
             "powerConsumption": _parse_power(data),
             "buildingCategory": category,
             "somersloopSlots": _parse_slots(data),
+            "iconPath": building_icons.get("Desc_" + class_id.removeprefix("Build_")),
         }
 
     # ── 아이템 처리 ──────────────────────────────────────────────────
@@ -465,6 +491,9 @@ def parse_docs(docs_path: str, output_dir: str) -> dict:
             "className": class_id,
             "slug": _slug(class_id),
             "displayName": _display_name(class_id, data),
+            # 하드드라이브 대체 레시피 스키마틱으로만 해금. 클래스명은 기준 아님:
+            # Recipe_Alternate_Turbofuel_C 는 MAM 해금 표준 '터보 연료', Recipe_PureAluminumIngot_C 는 대체
+            "isAlternate": unlock_types.get(class_id) == {"EST_Alternate"},
             "recipeType": recipe_type,
             "producedIn": [produced_in] if produced_in else [],
             "buildingCategory": building_category,

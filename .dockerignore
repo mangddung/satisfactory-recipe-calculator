@@ -9,4 +9,5 @@ frontend/dist
 **/*.pyc
 **/*.pyo
 output
+game-data
 *.md

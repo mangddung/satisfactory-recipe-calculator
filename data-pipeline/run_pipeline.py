@@ -5,14 +5,16 @@ Satisfactory Recipe Data Pipeline Orchestrator
 Runs the full data pipeline in sequence:
 1. parse_docs.py  → Parse Docs.json → items.json, recipes.json, buildings.json
 2. classify.py    → Label items with acquisition, producedBy
-3. merge.py       → Apply overrides.json patches
+3. merge.py       → Apply overrides.json patches, then tech tiers / i18n names / icons
 4. validate.py    → Validate final JSON schemas and referential integrity
+
+원본 게임 데이터는 game-data/ 에 넣는다 (game-data/README.md 참고). 원본은 읽기만 한다.
 
 Usage:
     python run_pipeline.py [options]
 
 Options:
-    --docs-json PATH       Path to Docs.json (default: ../backend/data/original/Docs.json)
+    --game-data PATH       원본 게임 데이터 폴더 (default: ../game-data)
     --raw-output PATH      Output dir for parsed data (default: ../backend/data/raw)
     --intermediate-output PATH Output dir for classified data (default: ../backend/data/intermediate)
     --clean-output PATH    Output dir for final clean data (default: ../backend/data/clean)
@@ -49,23 +51,28 @@ def get_project_root() -> Path:
 def get_default_paths() -> dict:
     """Get default file paths relative to project root."""
     root = get_project_root()
-    original_dir = root / "backend" / "data" / "original"
-
-    # Docs.json 없으면 같은 구조의 언어별 파일 자동 탐색 (ko.json 등)
-    docs_json = original_dir / "Docs.json"
-    if not docs_json.exists():
-        candidates = sorted(original_dir.glob("*.json")) if original_dir.exists() else []
-        if candidates:
-            docs_json = candidates[0]
-            logger.info(f"Docs.json 없음 → 대체 파일 사용: {docs_json.name}")
-
     return {
-        "docs_json": docs_json,
+        "game_data": root / "game-data",
         "raw_dir": root / "backend" / "data" / "raw",
         "intermediate_dir": root / "backend" / "data" / "intermediate",
         "clean_dir": root / "backend" / "data" / "clean",
         "overrides": Path(__file__).parent / "overrides.json",
     }
+
+
+def find_language_files(game_data: Path) -> dict[str, Path]:
+    """game-data/ 또는 game-data/Docs/ 의 언어별 파일(ko.json, en-US.json …) → {언어코드: 경로}.
+    1.0 이전 단일 Docs.json 은 영어(en-US)로 취급."""
+    files = sorted(game_data.glob("*.json")) + sorted(game_data.glob("Docs/*.json"))
+    return {("en-US" if f.stem == "Docs" else f.stem): f for f in files}
+
+
+def pick_primary_language(langs: dict[str, Path]) -> str:
+    """구조(레시피·수량) 파싱용 기준 언어. 분류 규칙이 영어 이름도 보므로 en-US 우선."""
+    for code in ("en-US", "ko"):
+        if code in langs:
+            return code
+    return next(iter(langs))
 
 
 def ensure_directories(paths: dict) -> None:
@@ -110,54 +117,6 @@ class PipelineRunner:
 
         docs_json = self.paths["docs_json"]
         raw_dir = self.paths["raw_dir"]
-
-        # Check if Docs.json exists
-        if not docs_json.exists():
-            logger.warning(f"Docs.json not found: {docs_json}")
-            # Create a minimal Docs.json so pipeline doesn't fail entirely
-            docs_json.parent.mkdir(parents=True, exist_ok=True)
-            minimal_docs = [
-                {
-                    "NativeClass": "Class'/Script/FactoryGame.FGItemDescriptor'",
-                    "Classes": [
-                        {
-                            "ClassName": "Desc_OreIron_C",
-                            "mDisplayName": "Iron Ore",
-                            "mForm": "RFC_None",
-                        },
-                        {
-                            "ClassName": "Desc_IronIngot_C",
-                            "mDisplayName": "Iron Ingot",
-                            "mForm": "RFC_None",
-                        },
-                    ],
-                },
-                {
-                    "NativeClass": "Class'/Script/FactoryGame.FGRecipe'",
-                    "Classes": [
-                        {
-                            "ClassName": "Recipe_IngotIron_C",
-                            "mDisplayName": "Iron Ingot",
-                            "mIngredients": '((ItemClass="/Game/FactoryGame/Resource/Parts/IronOre/Desc_OreIron.Desc_OreIron_C",Amount=1))',
-                            "mProduct": '((ItemClass="/Game/FactoryGame/Resource/Parts/IronIngot/Desc_IronIngot.Desc_IronIngot_C",Amount=1))',
-                            "mProducedIn": '((ItemClass="/Game/FactoryGame/Buildable/Factory/SmelterMk1/Build_SmelterMk1.Build_SmelterMk1_C",Amount=1))',
-                            "mManufactoringDuration": 2,
-                        }
-                    ],
-                },
-                {
-                    "NativeClass": "Class'/Script/FactoryGame.FGBuildableManufacturer'",
-                    "Classes": [
-                        {
-                            "ClassName": "Build_SmelterMk1_C",
-                            "mDisplayName": "Smelter",
-                        }
-                    ],
-                },
-            ]
-            with open(docs_json, "w", encoding="utf-8") as f:
-                json.dump(minimal_docs, f, indent=2, ensure_ascii=False)
-            logger.info(f"Created minimal Docs.json: {docs_json}")
 
         stats = parse_docs.parse_docs(str(docs_json), str(raw_dir))
 
@@ -251,16 +210,51 @@ class PipelineRunner:
 
         logger.info(f"Merge complete: {stats['items_patches']} item patches, {stats['recipes_patches']} recipe patches, {stats['buildings_patches']} building patches")
 
-        docs_json = self.paths.get("docs_json")
-        if docs_json and Path(docs_json).exists():
-            tier_count = merge.enrich_item_tiers(str(clean_dir), str(docs_json))
-            logger.info(f"Tech tier enrichment: {tier_count} items tagged")
+        tier_count = merge.enrich_item_tiers(str(clean_dir), str(self.paths["docs_json"]))
+        logger.info(f"Tech tier enrichment: {tier_count} items tagged")
 
-            icons_dir = Path(docs_json).parent / "icons"
-            icon_stats = merge.validate_icon_paths(str(clean_dir), str(icons_dir))
-            logger.info(f"Icon validation: {icon_stats['nulled']}/{icon_stats['total']} paths nulled (file not found)")
+        self.run_names(clean_dir)
 
+        icon_stats = merge.extract_icons(clean_dir, self.paths["game_data"])
+        if icon_stats["missing"]:
+            logger.warning(f"아이콘 {len(icon_stats['missing'])}개 없음 (FModel 출력물 확인): {icon_stats['missing'][:5]}")
+
+        self.write_setup(clean_dir, icon_stats)
         return {"stats": stats, "clean_dir": str(clean_dir)}
+
+    def write_setup(self, clean_dir: Path, icon_stats: dict) -> None:
+        """clean/setup.json — 설정 완료 표시 + 선택 언어 + 아이콘 결과 + 실제 사용한 원본 파일(정리 기능용)."""
+        game_data = Path(self.paths["game_data"])
+        used = list(self.paths["languages"].values()) + icon_stats["sources"]  # 둘 다 game_data 기준 경로
+        setup = {
+            "languages": sorted(self.paths["languages"]),
+            "defaultLanguage": self.paths["default_language"],
+            "icons": {k: icon_stats[k] for k in ("needed", "copied", "missing")},
+            "usedSources": sorted(Path(p).relative_to(game_data).as_posix() for p in used),
+            "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+        }
+        with open(clean_dir / "setup.json", "w", encoding="utf-8") as f:
+            json.dump(setup, f, ensure_ascii=False, indent=2)
+
+    def run_names(self, clean_dir: Path) -> None:
+        """언어 파일마다 아이템·레시피·건물·채굴기·컨베이어 이름을 clean/i18n/<언어>.json 으로 추출."""
+        parse_docs = load_module("parse_docs")
+        ids: set[str] = set()
+        for filename in ("items.json", "recipes.json", "buildings.json", "extractors.json", "conveyors.json"):
+            path = clean_dir / filename
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    ids |= set(json.load(f))
+
+        i18n_dir = clean_dir / "i18n"
+        i18n_dir.mkdir(parents=True, exist_ok=True)
+        for old in i18n_dir.glob("*.json"):
+            old.unlink()
+        for code, path in self.paths["languages"].items():
+            names = parse_docs.extract_names(path, ids)
+            with open(i18n_dir / f"{code}.json", "w", encoding="utf-8") as f:
+                json.dump(names, f, ensure_ascii=False, indent=2)
+        logger.info(f"이름 추출: {len(self.paths['languages'])}개 언어 → {i18n_dir}")
 
     def run_validate(self) -> dict:
         """Step 4: Validate final JSON schemas and referential integrity."""
@@ -300,6 +294,27 @@ class PipelineRunner:
         start_time = time.time()
         logger.info("Starting Satisfactory Recipe Data Pipeline")
         logger.info(f"Project root: {get_project_root()}")
+
+        languages = find_language_files(self.paths["game_data"])
+        if not languages:
+            raise FileNotFoundError(
+                f"게임 언어 파일 없음: {self.paths['game_data']} — "
+                "Satisfactory/CommunityResources/Docs 폴더를 game-data/ 에 복사하세요 (game-data/README.md 참고)"
+            )
+        if self.args.languages:
+            selected = [c.strip() for c in self.args.languages.split(",") if c.strip()]
+            unknown = [c for c in selected if c not in languages]
+            if unknown:
+                raise ValueError(f"game-data에 없는 언어: {unknown} (있는 언어: {sorted(languages)})")
+            languages = {c: languages[c] for c in selected}
+        default_language = self.args.default_language or ("ko" if "ko" in languages else sorted(languages)[0])
+        if default_language not in languages:
+            raise ValueError(f"기본 언어 '{default_language}'가 선택한 언어에 없음: {sorted(languages)}")
+        primary = pick_primary_language(languages)
+        self.paths["languages"] = languages
+        self.paths["default_language"] = default_language
+        self.paths["docs_json"] = languages[primary]
+        logger.info(f"언어 파일 {len(languages)}개, 기준 언어: {primary}, 기본 언어: {default_language}")
 
         # Ensure directories exist
         ensure_directories(self.paths)
@@ -352,10 +367,22 @@ Examples:
 
     # Path arguments
     parser.add_argument(
-        "--docs-json",
+        "--game-data",
         type=str,
         default=None,
-        help="Path to Docs.json file (default: ../backend/data/original/Docs.json)",
+        help="원본 게임 데이터 폴더 — 언어별 Docs json + FModel 아이콘 (default: ../game-data)",
+    )
+    parser.add_argument(
+        "--languages",
+        type=str,
+        default=None,
+        help="사용할 언어 코드 (쉼표 구분, 예: ko,en-US). 생략하면 game-data의 언어 전부",
+    )
+    parser.add_argument(
+        "--default-language",
+        type=str,
+        default=None,
+        help="기본 언어 코드 (default: ko, 없으면 첫 언어)",
     )
     parser.add_argument(
         "--raw-output",
@@ -406,17 +433,17 @@ Examples:
 
 def build_paths(args: argparse.Namespace) -> dict:
     """Build paths dict from arguments, using defaults where not specified."""
-    defaults = get_default_paths()
-
-    paths = {}
-    for key in defaults:
-        arg_val = getattr(args, key.replace("-", "_"), None)
-        if arg_val is not None:
-            paths[key] = Path(arg_val)
-        else:
-            paths[key] = defaults[key]
-
-    return paths
+    arg_names = {
+        "game_data": "game_data",
+        "raw_dir": "raw_output",
+        "intermediate_dir": "intermediate_output",
+        "clean_dir": "clean_output",
+        "overrides": "overrides",
+    }
+    return {
+        key: Path(getattr(args, arg_names[key])) if getattr(args, arg_names[key]) is not None else default
+        for key, default in get_default_paths().items()
+    }
 
 
 def run():

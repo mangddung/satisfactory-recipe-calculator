@@ -16,6 +16,7 @@ import json
 import copy
 import logging
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -363,59 +364,64 @@ def _extract_tier_from_docs(docs_json_path: Path, recipes: dict) -> dict:
 
     logger.info(f"Tier enrichment: 스키마틱 {len(schematics_entry['Classes'])}개 중 {skipped}개 필터링 (AWESOME 상점·FICSMAS·SaveCompatibility·Tier0 대체)")
 
+    # 대체 레시피는 표준 레시피가 없는 아이템에만 적용 (하드드라이브 해금이라 진행 티어를 앞당기면 안 됨)
     item_tier: dict[str, int] = {}
-    for rid, r in recipes.items():
-        t = recipe_tier.get(rid)
-        if t is None:
-            continue
-        for prod in r.get('products', []):
-            iid = prod.get('item', '')
-            if iid and (iid not in item_tier or t < item_tier[iid]):
-                item_tier[iid] = t
+    for alternate in (False, True):
+        found: dict[str, int] = {}
+        for rid, r in recipes.items():
+            t = recipe_tier.get(rid)
+            if t is None or r.get('isAlternate', False) != alternate:
+                continue
+            for prod in r.get('products', []):
+                iid = prod.get('item', '')
+                if iid and iid not in item_tier and (iid not in found or t < found[iid]):
+                    found[iid] = t
+        item_tier.update(found)
 
     return item_tier
 
 
-def validate_icon_paths(clean_dir: str | Path, icons_dir: str | Path) -> dict:
-    """items.json, buildings.json의 iconPath 중 실제 파일이 없으면 null로 치환."""
+def extract_icons(clean_dir: str | Path, source_dir: str | Path) -> dict:
+    """source_dir(game-data) 안의 png 중 items/buildings가 참조하는 아이콘만 clean/icons로 복사.
+    원본은 읽기만 한다. FModel 출력 폴더 구조와 무관하게 경로 끝부분으로 매칭
+    (FModel은 /Game/ 을 FactoryGame/Content/ 로 내보내므로 iconPath 앞의 FactoryGame/ 은 비교에서 뺌).
+    """
     clean_dir = Path(clean_dir)
-    icons_dir = Path(icons_dir)
-    if not icons_dir.exists():
-        logger.warning(f"아이콘 디렉토리 없음: {icons_dir} — 아이콘 검증 스킵")
-        return {'total': 0, 'nulled': 0}
+    out_dir = clean_dir / 'icons'
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
 
-    icon_set = {str(p).lower() for p in icons_dir.rglob('*.png')}
+    by_name: dict[str, list[Path]] = {}
+    for p in Path(source_dir).rglob('*.png'):
+        by_name.setdefault(p.name.lower(), []).append(p)
 
-    def exists(icon_path: str) -> bool:
-        parts = Path(icon_path).parts
-        for i in range(len(parts)):
-            candidate = str((icons_dir / Path(*parts[i:])).resolve()).lower()
-            if candidate in icon_set:
-                return True
-        return False
-
-    total = nulled = 0
+    needed: set[str] = set()
     for filename in ('items.json', 'buildings.json'):
         filepath = clean_dir / filename
-        if not filepath.exists():
-            continue
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        changed = False
-        for obj in data.values():
-            ip = obj.get('iconPath')
-            if ip is not None:
-                total += 1
-                if not exists(ip):
-                    obj['iconPath'] = None
-                    nulled += 1
-                    changed = True
-        if changed:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+        if filepath.exists():
+            with open(filepath, 'r', encoding='utf-8') as f:
+                needed |= {v['iconPath'] for v in json.load(f).values() if v.get('iconPath')}
 
-    logger.info(f"아이콘 검증: {total}개 확인, {nulled}개 null 처리")
-    return {'total': total, 'nulled': nulled}
+    copied = 0
+    missing = []
+    sources = []
+    for icon_path in sorted(needed):
+        tail = '/' + icon_path.split('/', 1)[-1].lower()
+        src = next(
+            (p for p in by_name.get(Path(icon_path).name.lower(), []) if p.as_posix().lower().endswith(tail)),
+            None,
+        )
+        if src is None:
+            missing.append(icon_path)
+            continue
+        dest = out_dir / icon_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        copied += 1
+        sources.append(src)
+
+    logger.info(f"아이콘 추출: 필요 {len(needed)}개 중 {copied}개 복사, {len(missing)}개 없음")
+    return {'needed': len(needed), 'copied': copied, 'missing': missing, 'sources': sources}
 
 
 def enrich_item_tiers(clean_dir: str | Path, docs_json_path: str | Path | None) -> int:

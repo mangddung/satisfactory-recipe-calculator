@@ -20,8 +20,9 @@ backend/data/raw/
 backend/data/intermediate/
 backend/data/clean/
 
-# Original game data (large binary / UTF-16 JSON, not versioned)
-backend/data/original/
+# Original game data (Coffee Stain assets, user-provided — see game-data/README.md)
+game-data/*
+!game-data/README.md
 
 # Runtime user data
 backend/data/plans/
