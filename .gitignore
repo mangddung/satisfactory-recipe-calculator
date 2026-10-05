@@ -38,3 +38,16 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Secrets
+.env
+
+# Claude Code (local settings)
+.claude/
+
+# Working/planning docs (not published)
+satisfactory-planner-plan.md
+phase0-team-instructions.md
+docs/FEATURE_HIDE_SUBTREE.md
+docs/INSPECTION_REPORT.md
+docs/UNUSED_CODE.md
