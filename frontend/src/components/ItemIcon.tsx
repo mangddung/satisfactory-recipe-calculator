@@ -17,7 +17,7 @@ export default function ItemIcon({ iconPath, size = 32, alt = '' }: Props) {
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#444',
+          color: 'var(--text-faint)',
           fontSize: size * 0.5,
           flexShrink: 0,
         }}

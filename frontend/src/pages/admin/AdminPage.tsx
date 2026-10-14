@@ -58,13 +58,13 @@ export default function AdminPage() {
           minHeight: 64,
           lineHeight: 'normal',
           padding: '8px 24px',
-          background: '#0d0d1a',
-          borderBottom: '1px solid #1e1e2e',
+          background: 'var(--bg-panel)',
+          borderBottom: '1px solid var(--border)',
         }}
       >
         <Space>
-          <SettingOutlined style={{ color: '#e8b84b', fontSize: 20 }} />
-          <span style={{ color: '#e8b84b', fontWeight: 700, fontSize: 16 }}>
+          <SettingOutlined style={{ color: 'var(--accent)', fontSize: 20 }} />
+          <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 16 }}>
             Satisfactory Admin
           </span>
         </Space>
@@ -121,7 +121,7 @@ export default function AdminPage() {
       )}
 
       <Layout>
-        <Sider width={180} style={{ background: '#0d0d1a', borderRight: '1px solid #1e1e2e' }}>
+        <Sider width={180} style={{ background: 'var(--bg-panel)', borderRight: '1px solid var(--border)' }}>
           <Menu
             mode="inline"
             selectedKeys={[activeTab]}
@@ -136,7 +136,7 @@ export default function AdminPage() {
           />
         </Sider>
 
-        <Content style={{ padding: 24, background: '#0a0a12', minHeight: 'calc(100vh - 64px)' }}>
+        <Content style={{ padding: 24, background: 'var(--bg-app)', minHeight: 'calc(100vh - 64px)' }}>
           {activeTab === 'items' && <ItemsTab />}
           {activeTab === 'recipes' && <RecipesTab />}
           {activeTab === 'buildings' && <BuildingsTab />}

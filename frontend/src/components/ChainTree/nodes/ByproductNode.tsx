@@ -23,8 +23,8 @@ export default function ByproductNode({ data }: NodeProps<ByproductFlowNode>) {
   const { t } = useLang()
   return (
     <div style={{
-      background: '#0b0b18',
-      border: `1px dashed ${data.usedInChain ? '#2a6a3a' : '#2a3050'}`,
+      background: 'var(--bg-panel)',
+      border: `1px dashed ${data.usedInChain ? 'var(--success-border)' : 'var(--border-strong)'}`,
       borderRadius: 7,
       padding: '6px 10px',
       width: 160,
@@ -34,15 +34,15 @@ export default function ByproductNode({ data }: NodeProps<ByproductFlowNode>) {
       alignItems: 'center',
       gap: 7,
     }}>
-      <Handle type="target" position={Position.Left} style={{ background: '#4a4a6a' }} />
+      <Handle type="target" position={Position.Left} style={{ background: 'var(--text-faint)' }} />
       <ItemIcon iconPath={data.iconPath} size={20} />
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 11, color: '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {data.displayName}
         </div>
-        <div style={{ fontSize: 10, color: '#6a8a8a' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
           {fmtRate(data.rate)}/min
-          {data.usedInChain && <span style={{ color: '#4caf50', marginLeft: 6 }}>{t('node.byproductUsed')}</span>}
+          {data.usedInChain && <span style={{ color: 'var(--success)', marginLeft: 6 }}>{t('node.byproductUsed')}</span>}
         </div>
       </div>
     </div>

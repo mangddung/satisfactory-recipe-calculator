@@ -22,7 +22,7 @@ function SetupGate({ children }: { children: ReactNode }) {
   if (pathname === '/setup') return children
   if (isPending) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a12' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)' }}>
         <Spin />
       </div>
     )
@@ -39,6 +39,7 @@ function LocalizedApp() {
       locale={lang === 'ko' ? koKR : enUS}
       theme={{
         algorithm: theme.darkAlgorithm,
+        // antd 는 파생색 계산에 실제 색 값이 필요해 var() 불가 — index.css --accent 와 같은 값 유지
         token: { colorPrimary: '#e8b84b', borderRadius: 6 },
       }}
     >

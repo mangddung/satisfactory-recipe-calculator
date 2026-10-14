@@ -90,7 +90,7 @@ export default function RecipesTab() {
       render: (_, r) => r.products.map((p) => (
         <div key={p.item} style={{ fontSize: 12 }}>
           {itemMap[p.item]?.displayName ?? p.item} ×{p.amount}{' '}
-          <span style={{ color: '#7ab8b8' }}>{perMin(p.amount, r.manufactoringDuration)}</span>
+          <span style={{ color: 'var(--rate)' }}>{perMin(p.amount, r.manufactoringDuration)}</span>
         </div>
       )),
     },

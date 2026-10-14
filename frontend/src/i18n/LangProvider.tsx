@@ -55,7 +55,7 @@ export default function LangProvider({ children }: { children: ReactNode }) {
 
   if (isPending) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a12' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)' }}>
         <Spin />
       </div>
     )

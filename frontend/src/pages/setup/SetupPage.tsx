@@ -58,16 +58,16 @@ function initialSelection(codes: string[], previous: string[] | undefined): stri
   return picks.length ? picks : codes.slice(0, 1)
 }
 
-const intro: CSSProperties = { color: '#9aaabb', marginTop: 0 }
-const muted: CSSProperties = { color: '#5a6a8a', fontSize: 12 }
-const label: CSSProperties = { color: '#9aaabb', fontWeight: 600, marginBottom: 6 }
+const intro: CSSProperties = { color: 'var(--text-secondary)', marginTop: 0 }
+const muted: CSSProperties = { color: 'var(--text-muted)', fontSize: 12 }
+const label: CSSProperties = { color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 6 }
 const list: CSSProperties = { margin: '4px 0 0', paddingInlineStart: 20 }
 const footer: CSSProperties ={ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 24 }
 const scrollBox: CSSProperties = {
   maxHeight: 280,
   overflowY: 'auto',
-  background: '#0e0e20',
-  border: '1px solid #181830',
+  background: 'var(--bg-raised)',
+  border: '1px solid var(--border)',
   borderRadius: 6,
   padding: '4px 12px',
 }
@@ -392,7 +392,7 @@ export default function SetupPage() {
           ))}
         </Checkbox.Group>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-          <span style={{ color: '#9aaabb' }}>{t('setup.lang.default')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{t('setup.lang.default')}</span>
           <Select
             value={defaultLanguage}
             onChange={setDefault}
@@ -463,8 +463,8 @@ export default function SetupPage() {
                     <div style={{ ...label, marginTop: 16 }}>{t('setup.icons.files')}</div>
                     <div style={scrollBox}>
                       {missing.map((path) => (
-                        <div key={path} style={{ padding: '8px 0', borderBottom: '1px solid #181830' }}>
-                          <div style={{ color: '#c8d8e8', fontWeight: 600 }}>{path.split('/').pop()}</div>
+                        <div key={path} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ color: 'var(--text)', fontWeight: 600 }}>{path.split('/').pop()}</div>
                           <div style={muted}>
                             {t('setup.icons.fmodelPath')}:{' '}
                             <Typography.Text code copyable>{fmodelPath(path)}</Typography.Text>
@@ -555,11 +555,11 @@ export default function SetupPage() {
   return (
     // antd built-in texts (modal buttons, copy tooltips...) in the same language as t
     <ConfigProvider locale={BROWSER_UI_LANG === 'ko' ? koKR : enUS}>
-      <div style={{ minHeight: '100vh', background: '#0a0a12', padding: '40px 16px' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--bg-app)', padding: '40px 16px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
-            <SettingOutlined style={{ color: '#e8b84b', fontSize: 20 }} />
-            <span style={{ color: '#e8b84b', fontWeight: 700, fontSize: 16 }}>
+            <SettingOutlined style={{ color: 'var(--accent)', fontSize: 20 }} />
+            <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 16 }}>
               Satisfactory — {t('setup.title')}
             </span>
           </div>
@@ -574,7 +574,7 @@ export default function SetupPage() {
               { title: t('setup.step.done') },
             ]}
           />
-          <div style={{ background: '#0b0b18', border: '1px solid #181830', borderRadius: 7, padding: 24 }}>
+          <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 7, padding: 24 }}>
             {content}
           </div>
         </div>

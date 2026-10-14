@@ -39,7 +39,7 @@ export default function ExtractorsTab() {
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <span style={{ color: '#e8b84b', fontWeight: 700, fontSize: 16 }}>{t('extractors.title')}</span>
+        <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 16 }}>{t('extractors.title')}</span>
         <Input
           placeholder={t('extractors.searchPlaceholder')}
           value={search}
@@ -60,7 +60,7 @@ export default function ExtractorsTab() {
             title: t('common.name'),
             dataIndex: 'displayName',
             render: (name: string) => (
-              <span style={{ color: '#ddd', fontWeight: 500 }}>{name}</span>
+              <span style={{ color: 'var(--text)', fontWeight: 500 }}>{name}</span>
             ),
           },
           {
@@ -79,7 +79,7 @@ export default function ExtractorsTab() {
             width: 140,
             align: 'right',
             render: (v: number) => (
-              <span style={{ color: '#7ab8b8', fontWeight: 600 }}>{v}</span>
+              <span style={{ color: 'var(--rate)', fontWeight: 600 }}>{v}</span>
             ),
           },
           {
@@ -88,7 +88,7 @@ export default function ExtractorsTab() {
             width: 140,
             align: 'right',
             render: (v: number) => (
-              <span style={{ color: '#e8b84b' }}>{v}</span>
+              <span style={{ color: 'var(--accent)' }}>{v}</span>
             ),
           },
           {
@@ -96,7 +96,7 @@ export default function ExtractorsTab() {
             dataIndex: 'id',
             ellipsis: true,
             render: (id: string) => (
-              <span style={{ color: '#555', fontSize: 11, fontFamily: 'monospace' }}>{id}</span>
+              <span style={{ color: 'var(--text-faint)', fontSize: 11, fontFamily: 'monospace' }}>{id}</span>
             ),
           },
         ]}

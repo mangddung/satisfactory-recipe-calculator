@@ -45,22 +45,22 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
     : null
 
   const acquisitionType = data.itemAcquisition ?? 'miner'
-  const borderColor = data.isCycle || (hasExtractor && supplyRate !== null && !sufficient) ? '#7a2a2a' : '#1a3a1a'
+  const borderColor = data.isCycle || (hasExtractor && supplyRate !== null && !sufficient) ? 'var(--danger-border)' : 'var(--success-border)'
 
   return (
     <>
       <div
         style={{
-          background: '#090f09',
+          background: 'var(--raw-bg)',
           border: `1.5px solid ${borderColor}`,
           borderRadius: 8,
           padding: '9px 11px',
           width: 215,
           boxSizing: 'border-box',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+          boxShadow: 'var(--shadow-node)',
         }}
       >
-        <Handle type="source" position={Position.Right} style={{ background: '#3a8a40', width: 8, height: 8 }} />
+        <Handle type="source" position={Position.Right} style={{ background: 'var(--success-muted)', width: 8, height: 8 }} />
 
         {/* 헤더: 아이콘 + 이름 + 설정 버튼 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -70,7 +70,7 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
               style={{
                 fontSize: 13,
                 fontWeight: 700,
-                color: '#c8dcc8',
+                color: 'var(--text)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -79,11 +79,11 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
               {data.displayName}
             </div>
             {extractorBreakdown ? (
-              <div style={{ fontSize: 10, color: '#4a8a50', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+              <div style={{ fontSize: 10, color: 'var(--success-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
                 {extractorBreakdown.join(' / ')}
               </div>
             ) : extractorSuggestion ? (
-              <div style={{ fontSize: 10, color: '#4a8a50', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+              <div style={{ fontSize: 10, color: 'var(--success-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
                 {extractors[extractorSuggestion.extractorId]?.displayName ?? extractorSuggestion.displayName}
               </div>
             ) : null}
@@ -93,7 +93,7 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
               <Button
                 type="text"
                 size="small"
-                style={{ color: '#e8b84b', padding: '0 4px', height: 22, fontSize: 11, lineHeight: '22px' }}
+                style={{ color: 'var(--accent)', padding: '0 4px', height: 22, fontSize: 11, lineHeight: '22px' }}
                 onClick={() => setModalOpen(true)}
               >
                 {t('node.settings')}
@@ -105,10 +105,10 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
         {/* 공급량 표시 */}
         {hasExtractor && supplyRate !== null && (
           <>
-            <div style={{ borderTop: '1px solid #182818', margin: '7px 0' }} />
+            <div style={{ borderTop: '1px solid var(--border)', margin: '7px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-              <span style={{ color: '#4a5a4a' }}>{t('node.required', { rate: fmtRate(data.targetRate) })}</span>
-              <span style={{ color: sufficient ? '#3a8a40' : '#aa3a3a', fontWeight: 700 }}>
+              <span style={{ color: 'var(--text-faint)' }}>{t('node.required', { rate: fmtRate(data.targetRate) })}</span>
+              <span style={{ color: sufficient ? 'var(--success-muted)' : 'var(--danger)', fontWeight: 700 }}>
                 {t('node.supply', { rate: fmtRate(supplyRate) })} {sufficient ? '✓' : '✗'}
               </span>
             </div>
@@ -116,13 +116,13 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
         )}
 
         {!hasExtractor && (
-          <div style={{ fontSize: 11, color: '#5a8888', marginTop: 5 }}>
+          <div style={{ fontSize: 11, color: 'var(--rate-muted)', marginTop: 5 }}>
             {t('node.required', { rate: fmtRate(data.targetRate) })}
           </div>
         )}
 
         {data.isCycle && (
-          <div style={{ fontSize: 11, color: '#c0392b', marginTop: 3 }}>
+          <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 3 }}>
             {t('node.cycle')}
           </div>
         )}

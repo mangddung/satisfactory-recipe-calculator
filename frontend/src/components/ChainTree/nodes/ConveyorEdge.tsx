@@ -30,8 +30,8 @@ export default function ConveyorEdge({
 
   const over = isFinite(limit) && throughput > limit
   const near = isFinite(limit) && !over && throughput > limit * 0.8
-  const stroke = isDashed ? '#3a3a5a' : over ? '#cc4444' : near ? '#cc8844' : '#2a4a6a'
-  const labelColor = isDashed ? '#5a5a7a' : over ? '#ff6666' : '#7ab8b8'
+  const stroke = isDashed ? 'var(--border-strong)' : over ? 'var(--danger)' : near ? 'var(--warning)' : 'var(--border-strong)'
+  const labelColor = isDashed ? 'var(--text-faint)' : over ? 'var(--danger)' : 'var(--rate)'
 
   return (
     <>
@@ -50,11 +50,11 @@ export default function ConveyorEdge({
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             fontSize: 10,
             color: labelColor,
-            background: '#0a0a14',
+            background: 'var(--bg-app)',
             padding: '1px 5px',
             borderRadius: 3,
             pointerEvents: 'none',
-            border: over ? '1px solid #cc444466' : 'none',
+            border: over ? '1px solid var(--danger-border)' : 'none',
             whiteSpace: 'nowrap',
           }}
         >

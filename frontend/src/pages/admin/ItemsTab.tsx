@@ -116,7 +116,7 @@ export default function ItemsTab() {
           <Statistic
             title={t('items.acq.unclassified')}
             value={unclassifiedCount}
-            valueStyle={{ color: unclassifiedCount > 0 ? '#e74c3c' : undefined }}
+            valueStyle={{ color: unclassifiedCount > 0 ? 'var(--danger)' : undefined }}
           />
         </Card>
         <Card size="small"><Statistic title={t('admin.totalItems')} value={items.length} /></Card>

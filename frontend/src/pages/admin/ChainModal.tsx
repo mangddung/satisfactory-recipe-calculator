@@ -74,7 +74,7 @@ export default function ChainModal({ recipe, onClose }: Props) {
       style={{ top: 20 }}
       styles={{ body: { height: '70vh', padding: '12px 8px', display: 'flex', flexDirection: 'column' } }}
     >
-      <div style={{ marginBottom: 8, color: '#aaa', fontSize: 13, flexShrink: 0 }}>
+      <div style={{ marginBottom: 8, color: 'var(--text-secondary)', fontSize: 13, flexShrink: 0 }}>
         {buildingNames} · {t('common.seconds', { value: recipe.manufactoringDuration })}
       </div>
       {calculateMutation.isPending && (

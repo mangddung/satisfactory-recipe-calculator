@@ -117,14 +117,14 @@ export default function NodeSettingsModal({
       cancelText={t('common.cancel')}
       width={580}
       styles={{
-        container: { background: '#0d0d1a', border: '1px solid #1e1e2e' },
-        header: { background: '#0d0d1a', borderBottom: '1px solid #1e1e2e' },
-        footer: { background: '#0d0d1a', borderTop: '1px solid #1e1e2e' },
+        container: { background: 'var(--bg-panel)', border: '1px solid var(--border)' },
+        header: { background: 'var(--bg-panel)', borderBottom: '1px solid var(--border)' },
+        footer: { background: 'var(--bg-panel)', borderTop: '1px solid var(--border)' },
       }}
     >
       {/* 필요량 */}
-      <div style={{ marginBottom: 12, fontSize: 12, color: '#888' }}>
-        {t('nodeSettings.requiredSupply')} <span style={{ color: '#7ab8b8', fontWeight: 600 }}>{fmtRate(targetRate)}/min</span>
+      <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+        {t('nodeSettings.requiredSupply')} <span style={{ color: 'var(--rate)', fontWeight: 600 }}>{fmtRate(targetRate)}/min</span>
       </div>
 
       {/* 모드 전환 */}
@@ -142,7 +142,7 @@ export default function NodeSettingsModal({
       {draft.mode === 'nodes' && (
         <>
           {/* 헤더 행 */}
-          <div style={{ display: 'flex', fontSize: 10, color: '#666', marginBottom: 4, padding: '0 4px' }}>
+          <div style={{ display: 'flex', fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, padding: '0 4px' }}>
             <div style={{ flex: 3, ...cellStyle }}>{t('nodeSettings.extractorTier')}</div>
             <div style={{ flex: 2, ...cellStyle }}>{t('nodeSettings.purity')}</div>
             <div style={{ flex: 2, ...cellStyle }}>{t('nodeSettings.overclock')}</div>
@@ -162,7 +162,7 @@ export default function NodeSettingsModal({
                   alignItems: 'center',
                   gap: 4,
                   marginBottom: 6,
-                  background: '#111122',
+                  background: 'var(--bg-raised)',
                   borderRadius: 6,
                   padding: '6px 4px',
                 }}
@@ -181,7 +181,7 @@ export default function NodeSettingsModal({
                 </div>
                 <div style={{ flex: 2, minWidth: 0 }}>
                   {ext && !ext.hasPurity ? (
-                    <div style={{ textAlign: 'center', color: '#555' }}>—</div>
+                    <div style={{ textAlign: 'center', color: 'var(--text-faint)' }}>—</div>
                   ) : (
                     <Select
                       size="small"
@@ -204,7 +204,7 @@ export default function NodeSettingsModal({
                     style={{ width: '100%' }}
                   />
                 </div>
-                <div style={{ flex: 2, textAlign: 'right', fontSize: 11, color: '#7ab8b8', whiteSpace: 'nowrap', paddingRight: 4 }}>
+                <div style={{ flex: 2, textAlign: 'right', fontSize: 11, color: 'var(--rate)', whiteSpace: 'nowrap', paddingRight: 4 }}>
                   {fmtRate(rowSupply)}/min
                 </div>
                 <Button
@@ -230,7 +230,7 @@ export default function NodeSettingsModal({
           </Button>
 
           {pressurizer && needsPressurizer && (
-            <div style={{ marginBottom: 12, fontSize: 11, color: '#e8b84b' }}>
+            <div style={{ marginBottom: 12, fontSize: 11, color: 'var(--accent)' }}>
               {t('nodeSettings.pressurizer', { name: pressurizer.displayName, power: pressurizer.powerConsumption })}
             </div>
           )}
@@ -240,13 +240,13 @@ export default function NodeSettingsModal({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: sufficient ? '#0a2a0a' : '#2a0a0a',
-            border: `1px solid ${sufficient ? '#1e5a1e' : '#5a1e1e'}`,
+            background: sufficient ? 'var(--success-bg)' : 'var(--danger-bg)',
+            border: `1px solid ${sufficient ? 'var(--success-border)' : 'var(--danger-border)'}`,
             borderRadius: 6,
             padding: '6px 12px',
           }}>
-            <span style={{ fontSize: 12, color: '#aaa' }}>{t('nodeSettings.totalSupply')}</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: sufficient ? '#4caf50' : '#cc4444' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t('nodeSettings.totalSupply')}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: sufficient ? 'var(--success)' : 'var(--danger)' }}>
               {fmtRate(totalSupply)}/min {sufficient ? '✓' : '✗'}
             </span>
           </div>
@@ -255,7 +255,7 @@ export default function NodeSettingsModal({
 
       {draft.mode === 'manual' && (
         <div style={{ padding: '8px 0' }}>
-          <div style={{ marginBottom: 8, fontSize: 12, color: '#888' }}>{t('nodeSettings.manualHint')}</div>
+          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--text-muted)' }}>{t('nodeSettings.manualHint')}</div>
           <InputNumber
             value={draft.manualRate ?? 0}
             onChange={(v) => setDraft((prev) => ({ ...prev, manualRate: v }))}
@@ -264,7 +264,7 @@ export default function NodeSettingsModal({
             addonAfter="/min"
             style={{ width: 200 }}
           />
-          <div style={{ marginTop: 8, fontSize: 11, color: sufficient ? '#4caf50' : '#cc4444' }}>
+          <div style={{ marginTop: 8, fontSize: 11, color: sufficient ? 'var(--success)' : 'var(--danger)' }}>
             {sufficient
               ? t('nodeSettings.sufficient', { supply: fmtRate(totalSupply) })
               : t('nodeSettings.insufficient', { supply: fmtRate(totalSupply), need: fmtRate(targetRate) })}

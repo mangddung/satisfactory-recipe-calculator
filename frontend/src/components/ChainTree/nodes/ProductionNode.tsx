@@ -22,9 +22,9 @@ interface Props extends NodeProps<FlowNode> {
 
 export default function ProductionNode({ data, isRoot = false }: Props) {
   const { t } = useLang()
-  const borderColor = isRoot ? '#c89a30' : '#1e2e4a'
-  const bgColor = isRoot ? '#140f00' : '#0b0b18'
-  const headerColor = isRoot ? '#e8b84b' : '#c8d8e8'
+  const borderColor = isRoot ? 'var(--accent-strong)' : 'var(--border-strong)'
+  const bgColor = isRoot ? 'var(--accent-bg)' : 'var(--bg-panel)'
+  const headerColor = isRoot ? 'var(--accent)' : 'var(--text)'
 
   return (
     <div style={{
@@ -34,10 +34,10 @@ export default function ProductionNode({ data, isRoot = false }: Props) {
       padding: '9px 11px',
       width: 195,
       boxSizing: 'border-box',
-      boxShadow: isRoot ? '0 0 12px rgba(200,154,48,0.15)' : '0 2px 8px rgba(0,0,0,0.4)',
+      boxShadow: isRoot ? '0 0 12px var(--accent-glow)' : 'var(--shadow-node)',
     }}>
-      <Handle type="target" position={Position.Left} style={{ background: '#c89a30', width: 8, height: 8 }} />
-      {!isRoot && <Handle type="source" position={Position.Right} style={{ background: '#4a7aaa', width: 8, height: 8 }} />}
+      <Handle type="target" position={Position.Left} style={{ background: 'var(--accent-strong)', width: 8, height: 8 }} />
+      {!isRoot && <Handle type="source" position={Position.Right} style={{ background: 'var(--info-muted)', width: 8, height: 8 }} />}
 
       {/* 접힘 칩 — 입력 핸들 왼쪽, 숨긴 하위 노드 수 */}
       {data.collapsed && (
@@ -53,9 +53,9 @@ export default function ProductionNode({ data, isRoot = false }: Props) {
             transform: 'translate(-10px, -50%)',
             padding: '1px 7px',
             borderRadius: 10,
-            border: '1px solid #c89a30',
-            background: '#140f00',
-            color: '#e8b84b',
+            border: '1px solid var(--accent-strong)',
+            background: 'var(--accent-bg)',
+            color: 'var(--accent)',
             fontSize: 11,
             fontWeight: 700,
             cursor: 'pointer',
@@ -73,7 +73,7 @@ export default function ProductionNode({ data, isRoot = false }: Props) {
           <div style={{ fontSize: 13, fontWeight: 700, color: headerColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {data.displayName}
           </div>
-          <div style={{ fontSize: 10, color: '#5a7a9a', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {data.buildingName}
           </div>
         </div>
@@ -84,7 +84,7 @@ export default function ProductionNode({ data, isRoot = false }: Props) {
                 type="text"
                 size="small"
                 icon={data.collapsed ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                style={{ color: data.collapsed ? '#e8b84b' : '#5a7a9a' }}
+                style={{ color: data.collapsed ? 'var(--accent)' : 'var(--text-muted)' }}
                 onClick={() => data.onToggleCollapse(data.pathKey)}
               />
             </Tooltip>
@@ -92,23 +92,23 @@ export default function ProductionNode({ data, isRoot = false }: Props) {
         )}
       </div>
 
-      <div style={{ borderTop: '1px solid #181830', marginBottom: 7 }} />
+      <div style={{ borderTop: '1px solid var(--border)', marginBottom: 7 }} />
 
       {/* 기계 수 / 전력 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginBottom: 4 }}>
-        <span style={{ color: '#9aacbc' }}>
-          <span style={{ color: '#e8b84b', fontWeight: 800 }}>×{data.buildingCountCeil}</span>
-          <span style={{ color: '#6a8aaa', marginLeft: 4 }}>{data.buildingName}</span>
+        <span style={{ color: 'var(--text-secondary)' }}>
+          <span style={{ color: 'var(--accent)', fontWeight: 800 }}>×{data.buildingCountCeil}</span>
+          <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>{data.buildingName}</span>
         </span>
-        <span style={{ color: '#6ab0b0', fontSize: 11 }}>
+        <span style={{ color: 'var(--rate)', fontSize: 11 }}>
           ⚡ {fmtNum(data.powerMW)} MW
         </span>
       </div>
 
       {/* 클럭 / 처리량 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#4a6a7a' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-faint)' }}>
         <span>{t('node.clock', { value: fmtNum(data.clockSpeed) })}</span>
-        <span style={{ color: '#5a9090' }}>{fmtNum(data.targetRate)}/min</span>
+        <span style={{ color: 'var(--rate-muted)' }}>{fmtNum(data.targetRate)}/min</span>
       </div>
 
       {/* 대체 레시피 드롭다운 */}
