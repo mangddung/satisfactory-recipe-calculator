@@ -389,16 +389,6 @@ def api_classify():
     return jsonify({"ok": True, "item_id": item_id, "acquisition": acquisition})
 
 
-@app.delete("/api/admin/classify/<item_id>")
-def api_classify_delete(item_id: str):
-    """분류 오버라이드 제거 (자동 분류로 복원)."""
-    overrides = _load_classification_overrides()
-    if item_id in overrides:
-        del overrides[item_id]
-        _save_classification_overrides(overrides)
-    return jsonify({"ok": True, "item_id": item_id})
-
-
 # ponytail: 프로세스 안 잠금. 워커 여러 개(gunicorn 등)로 돌리면 파일 잠금으로 바꿔야 함
 _busy = threading.Lock()
 

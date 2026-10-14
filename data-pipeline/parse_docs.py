@@ -555,30 +555,3 @@ def parse_docs(docs_path: str, output_dir: str) -> dict:
 
     logger.info(f"아이템:{len(items_out)}, 레시피:{len(recipes_out)}, 건물:{len(buildings_out)}")
     return stats
-
-
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Satisfactory Docs.json 파서")
-    parser.add_argument("--input", "-i", default="data-pipeline/Docs.json")
-    parser.add_argument("--output", "-o", default="data-pipeline/output")
-    args = parser.parse_args()
-
-    stats = parse_docs(args.input, args.output)
-    print("\n" + "=" * 60)
-    print("파싱 완료!")
-    print(f"  아이템: {stats['total_items']}개")
-    print(f"  레시피: {stats['total_recipes']}개")
-    print(f"  건물:   {stats['total_buildings']}개")
-    print(f"  건물 미매핑 레시피: {stats['skipped_recipes']}개")
-    if stats["warnings"]:
-        print(f"\n경고 ({len(stats['warnings'])}건):")
-        for w in stats["warnings"][:10]:
-            print(f"  ⚠ {w}")
-        if len(stats["warnings"]) > 10:
-            print(f"  ... 외 {len(stats['warnings']) - 10}건")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    main()

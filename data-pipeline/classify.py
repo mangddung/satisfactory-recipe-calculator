@@ -253,33 +253,3 @@ def classify_items(items_path: str, recipes_path: str, output_dir: str,
 
     logger.info(f"분류 완료: {json.dumps(stats['acquisition_counts'], ensure_ascii=False)}")
     return stats
-
-
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Satisfactory 아이템 분류 라벨러")
-    parser.add_argument("--items", "-i", default="data-pipeline/output/items.json")
-    parser.add_argument("--recipes", "-r", default="data-pipeline/output/recipes.json")
-    parser.add_argument("--output", "-o", default="data-pipeline/output")
-    parser.add_argument("--overrides", default=None,
-                        help="classification_overrides.json 경로 (기본: data-pipeline/classification_overrides.json)")
-    args = parser.parse_args()
-
-    if args.overrides is None:
-        args.overrides = str(Path(__file__).parent / "classification_overrides.json")
-
-    stats = classify_items(args.items, args.recipes, args.output, args.overrides)
-
-    print("\n" + "=" * 60)
-    print("분류 완료!")
-    print(f"  총 아이템: {stats['total_items']}개")
-    print(f"  수동 오버라이드 적용: {stats['overrides_applied']}개")
-    print("\n  획득 방식 분포:")
-    for acq, count in stats["acquisition_counts"].items():
-        marker = " ← 관리자 페이지에서 지정 필요" if acq == "unclassified" and count > 0 else ""
-        print(f"    {acq}: {count}개{marker}")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    main()
