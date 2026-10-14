@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: row;
   height: 100vh;
-  background: #07070e;
+  background: var(--bg-app);
   overflow: hidden;
 }
 
@@ -12,8 +12,8 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #0b0b18;
-  border-right: 1px solid #181830;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
   padding: 14px 12px 12px;
   overflow: hidden;
   gap: 10px;
@@ -36,7 +36,7 @@
 .sidebarTitle {
   font-size: 11px;
   font-weight: 700;
-  color: #5a6a8a;
+  color: var(--text-muted);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 0 4px;
@@ -48,10 +48,10 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: #13132a;
-  border: 1px solid #2a3a5a;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
   border-radius: 5px;
-  color: #8ab0cc;
+  color: var(--text-secondary);
   font-size: 14px;
   cursor: pointer;
   flex-shrink: 0;
@@ -60,9 +60,9 @@
 }
 
 .hamburger:hover {
-  background: #1c2a40;
-  border-color: #4a6a8a;
-  color: #b8d8ee;
+  background: var(--bg-hover);
+  border-color: var(--info-muted);
+  color: var(--text);
 }
 
 .itemList {
@@ -77,7 +77,7 @@
   background: transparent;
 }
 .itemList::-webkit-scrollbar-thumb {
-  background: #222240;
+  background: var(--border-strong);
   border-radius: 2px;
 }
 
@@ -87,7 +87,7 @@
   gap: 8px;
   font-size: 11px;
   font-weight: 800;
-  color: #5c8caa;
+  color: var(--info-muted);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 16px 4px 5px;
@@ -99,7 +99,7 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, #1a2a3a 50%, transparent);
+  background: linear-gradient(90deg, var(--border) 50%, transparent);
 }
 
 .tierHeaderFirst {
@@ -107,13 +107,13 @@
 }
 
 .tierBadge {
-  background: #0e1e2e;
-  border: 1px solid #204060;
+  background: var(--info-bg);
+  border: 1px solid var(--border-strong);
   border-radius: 3px;
   padding: 1px 7px;
   font-size: 12px;
   font-weight: 900;
-  color: #7ac4e0;
+  color: var(--info);
   letter-spacing: 0.04em;
   line-height: 18px;
   display: inline-block;
@@ -126,7 +126,7 @@
   padding: 8px 10px;
   border-radius: 6px;
   cursor: pointer;
-  color: #9aaabb;
+  color: var(--text-secondary);
   font-size: 14px;
   user-select: none;
   transition: background 0.1s, color 0.1s;
@@ -147,8 +147,8 @@
 }
 
 .itemRow:hover {
-  background: #13132a;
-  color: #c8d8e8;
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .itemRow:hover img {
@@ -156,9 +156,9 @@
 }
 
 .itemRowActive {
-  background: #1a1500;
-  color: #e8b84b;
-  border-left: 3px solid #c89a30;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-left: 3px solid var(--accent-strong);
   padding-left: 7px;
 }
 
@@ -183,23 +183,24 @@
   flex-wrap: wrap;
   flex-shrink: 0;
   padding: 8px 12px;
-  background: #0b0b18;
-  border: 1px solid #181830;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
   border-radius: 7px;
 }
 
-.selectedItemBadge {
+.controlsRight {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: #1a1400;
-  border: 1px solid #3a2f00;
-  border-radius: 5px;
-  padding: 3px 10px 3px 6px;
-  color: #e8b84b;
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.recalcSpin {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
 }
 
 .loadingCenter {
@@ -227,8 +228,8 @@
 .summary {
   width: 320px;
   flex-shrink: 0;
-  background: #0b0b18;
-  border: 1px solid #181830;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
   border-radius: 7px;
   padding: 12px;
   overflow-y: auto;
@@ -241,7 +242,7 @@
   background: transparent;
 }
 .summary::-webkit-scrollbar-thumb {
-  background: #222240;
+  background: var(--border-strong);
   border-radius: 2px;
 }
 
@@ -251,12 +252,12 @@
   gap: 8px;
   margin-bottom: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #181830;
+  border-bottom: 1px solid var(--border);
 }
 
 .summaryTitle {
   font-weight: 700;
-  color: #e8b84b;
+  color: var(--accent);
   font-size: 14px;
   flex: 1;
   overflow: hidden;
@@ -274,7 +275,7 @@
 .rawLabel {
   font-size: 10px;
   font-weight: 700;
-  color: #4a5a7a;
+  color: var(--text-muted);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   margin: 10px 0 4px;
@@ -292,13 +293,13 @@
   gap: 9px;
   padding: 8px 10px;
   border-radius: 5px;
-  background: #0e0e20;
+  background: var(--bg-raised);
   font-size: 14px;
 }
 
 .summaryRowName {
   flex: 1;
-  color: #9aaabb;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -306,10 +307,110 @@
 }
 
 .chainArea {
+  position: relative;
   flex: 1;
   overflow: hidden;
-  background: #08080f;
-  border: 1px solid #181830;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
   border-radius: 7px;
   min-width: 0;
+}
+
+/* ── 모바일·세로 태블릿 (antd lg 브레이크포인트 992px 미만) ── */
+.mobileTitle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mobileTitle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawerSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* 컨트롤 바용 인라인 width 를 서랍에선 전체 폭으로 */
+.drawerSettings :global(.ant-select) {
+  width: 100% !important;
+}
+
+.drawerSettings :global(.ant-divider) {
+  display: none;
+}
+
+@media (min-width: 992px) {
+  .mobileOnly {
+    display: none !important;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .page {
+    height: 100dvh;
+  }
+
+  .sidebar,
+  .desktopOnly,
+  .btnLabel,
+  .summaryHeader {
+    display: none !important;
+  }
+
+  .main {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .controls {
+    flex-wrap: nowrap;
+    padding: 6px 8px;
+  }
+
+  .body {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* 위쪽(생산량·전력·접기 버튼)은 고정, 상세 목록만 스크롤 — 스크롤해도 접기 버튼이 안 사라짐 */
+  .summary {
+    width: auto;
+    max-height: 45dvh;
+    padding: 6px 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .summaryDetails {
+    display: none;
+  }
+
+  .summaryOpen .summaryDetails {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .chainArea {
+    min-height: 260px;
+  }
+
+  .chainArea :global(.react-flow__minimap) {
+    display: none;
+  }
 }

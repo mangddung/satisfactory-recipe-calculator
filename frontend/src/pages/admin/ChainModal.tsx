@@ -95,11 +95,7 @@ export default function ChainModal({ recipe, onClose }: Props) {
             onRawSettingsChange={() => {}}
             conveyorLimit={Infinity}
             collapsedPaths={collapsedPaths}
-            onToggleCollapse={(pathKey) => setCollapsedPaths((prev) => {
-              const next = new Set(prev)
-              if (!next.delete(pathKey)) next.add(pathKey)
-              return next
-            })}
+            onCollapsedPathsChange={setCollapsedPaths}
           />
         </div>
       )}

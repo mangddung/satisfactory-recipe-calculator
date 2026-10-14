@@ -25,7 +25,6 @@ const en: Record<keyof typeof ko, string> = {
   'calc.searchPlaceholder': 'Search...',
   'calc.tierOther': 'Other',
   'calc.noResults': 'No results',
-  'calc.showFullChain': 'Show full chain',
   'calc.conveyorUnlimited': 'Conveyor: Unlimited',
   'calc.save': 'Save',
   'calc.load': 'Load',
@@ -34,7 +33,6 @@ const en: Record<keyof typeof ko, string> = {
   'calc.targetRate': 'Output',
   'calc.totalPower': 'Total power',
   'calc.rawResources': 'Raw resources (per min)',
-  'calc.requiredInputs': 'Required inputs (per min)',
   'calc.loadingRecipes': 'Loading recipe data...',
   'calc.calculating': 'Calculating...',
   'calc.savePlan': 'Save plan',
@@ -44,7 +42,9 @@ const en: Record<keyof typeof ko, string> = {
   'calc.item': 'Item',
   'calc.loadPlan': 'Load',
   'calc.deleted': 'Deleted',
-  'calc.expandAll': 'Expand all',
+  'calc.showDetails': 'Details',
+  'calc.hideDetails': 'Hide',
+  'calc.openItems': 'Choose item',
 
   'node.settings': 'Settings',
   'node.required': 'Need {rate}/min',
@@ -167,6 +167,8 @@ const en: Record<keyof typeof ko, string> = {
   'buildings.somersloopSlots': 'Somersloop slots',
 
   'chain.title': '{name} — Ingredient chain',
+  'chain.depth': 'Step {n}',
+  'chain.depthAll': 'All',
 
   'extractors.title': 'Extraction facilities',
   'extractors.searchPlaceholder': 'Search by name...',

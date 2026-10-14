@@ -9,9 +9,9 @@ import {
   message,
   Empty,
   Divider,
+  Drawer,
   Select,
   Tag,
-  Checkbox,
   Table,
 } from 'antd'
 import {
@@ -20,7 +20,6 @@ import {
   DeleteOutlined,
   ThunderboltOutlined,
   MenuOutlined,
-  EyeOutlined,
 } from '@ant-design/icons'
 import {
   useCraftableItems,
@@ -45,6 +44,7 @@ import type {
   Purity,
 } from '../../types'
 import ChainTree from '../../components/ChainTree'
+import { collapsedPathsAtDepth, countNodesToDepth } from '../../components/ChainTree/flowUtils'
 import ItemIcon from '../../components/ItemIcon'
 import LanguageSelect from '../../components/LanguageSelect'
 import { useLang } from '../../i18n'
@@ -60,17 +60,23 @@ function aggregateBuildings(node: ChainNode, acc: Record<string, number> = {}): 
   return acc
 }
 
-function trimToDepth(node: ChainNode, depth: number): ChainNode {
-  if (depth <= 0) return { ...node, children: [], byproductOutputs: [] }
-  return { ...node, children: node.children.map((c) => trimToDepth(c, depth - 1)) }
+// 체인 노드가 이보다 많으면 처음엔 1단계까지만 펼침
+const AUTO_EXPAND_MAX_NODES = 20
+
+function initialCollapsedPaths(root: ChainNode): Set<string> {
+  return countNodesToDepth(root, Infinity) <= AUTO_EXPAND_MAX_NODES
+    ? new Set()
+    : collapsedPathsAtDepth(root, 1)
 }
 
+// 원자재 노드별 기본 설정. 같은 자원이 여러 곳에 나와도 필요량이 달라서 키는 노드 경로(pathKey)
 function collectRawDefaults(
   node: ChainNode,
   acc: Record<string, RawNodeSettings> = {},
   extractors: Record<string, Extractor> = {},
   purityMultipliers: Record<string, number> = {},
   extractorOverrides: Record<string, string> = {},
+  path: string = node.itemId,
 ): Record<string, RawNodeSettings> {
   if (!node.recipe && node.extractorSuggestion) {
     const suggestion = node.extractorSuggestion
@@ -89,10 +95,10 @@ function collectRawDefaults(
       purity: 'normal' as Purity,
       overclock: 100,
     }))
-    acc[node.itemId] = { mode: 'nodes', nodes, manualRate: null }
+    acc[path] = { mode: 'nodes', nodes, manualRate: null }
   }
   node.children.forEach((c) =>
-    collectRawDefaults(c, acc, extractors, purityMultipliers, extractorOverrides),
+    collectRawDefaults(c, acc, extractors, purityMultipliers, extractorOverrides, `${path}>${c.itemId}`),
   )
   return acc
 }
@@ -103,7 +109,6 @@ export default function CalculatorPage() {
   const [targetRate, setTargetRate] = useState<number>(60)
   const [recipeSelections, setRecipeSelections] = useState<Record<string, string>>({})
   const [result, setResult] = useState<CalculationResult | null>(null)
-  const [showFullChain, setShowFullChain] = useState(false)
   const [rawNodeSettings, setRawNodeSettings] = useState<Record<string, RawNodeSettings>>({})
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set())
   const [conveyorLimitValue, setConveyorLimitValue] = useState<number>(
@@ -117,6 +122,9 @@ export default function CalculatorPage() {
   const [plansModalOpen, setPlansModalOpen] = useState(false)
   const [sidebarSearch, setSidebarSearch] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  // 모바일 전용: 아이템·설정 서랍, 요약 상세(건물·원자재) 펼침
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   const { data: craftable = [], isLoading: craftableLoading } = useCraftableItems()
   const { data: items = [] } = useGameItems()
@@ -180,73 +188,62 @@ export default function CalculatorPage() {
 
   const selectedCraftable = craftable.find((c) => c.id === selectedItemId)
 
-  useEffect(() => {
-    if (!result) {
-      setRawNodeSettings({})
-      return
-    }
+  // 결과가 바뀌거나 채굴기 등급을 바꿀 때 원자재 노드 설정을 기본값으로 되돌림
+  function rawDefaultsFor(data: CalculationResult, minerId = extractorLevel) {
     const pm = gameConstants?.purityMultipliers ?? {}
-    setRawNodeSettings(
-      collectRawDefaults(result.root, {}, extractors, pm, { miner: extractorLevel }),
-    )
-  }, [result, extractorLevel, extractors, gameConstants])
+    return collectRawDefaults(data.root, {}, extractors, pm, { miner: minerId })
+  }
+
+  function handleExtractorLevelChange(minerId: string) {
+    setExtractorLevel(minerId)
+    if (result) setRawNodeSettings(rawDefaultsFor(result, minerId))
+  }
 
   useEffect(() => { setCookie('sc_conveyor', String(conveyorLimitValue)) }, [conveyorLimitValue])
   useEffect(() => { setCookie('sc_extractor', extractorLevel) }, [extractorLevel])
 
   const handleRawSettingsChange = useCallback(
-    (itemId: string, settings: RawNodeSettings) => {
-      setRawNodeSettings((prev) => ({ ...prev, [itemId]: settings }))
+    (pathKey: string, settings: RawNodeSettings) => {
+      setRawNodeSettings((prev) => ({ ...prev, [pathKey]: settings }))
     },
     [],
   )
 
-  const handleToggleCollapse = useCallback((pathKey: string) => {
-    setCollapsedPaths((prev) => {
-      const next = new Set(prev)
-      if (!next.delete(pathKey)) next.add(pathKey)
-      return next
-    })
-  }, [])
-
-  function runCalculate(payload: { itemId: string; targetRate: number; recipeSelections: Record<string, string> }) {
+  function runCalculate(
+    payload: { itemId: string; targetRate: number; recipeSelections: Record<string, string> },
+    resetCollapse = false,
+  ) {
     calculateMutation.mutate(payload, {
-      onSuccess: (data) => setResult(data),
+      onSuccess: (data) => {
+        setResult(data)
+        setRawNodeSettings(rawDefaultsFor(data))
+        if (resetCollapse) setCollapsedPaths(initialCollapsedPaths(data.root))
+      },
       onError: () => message.error(t('calc.calculateFailed')),
     })
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!selectedItemId) return
     const timer = setTimeout(() => {
       runCalculate({ itemId: selectedItemId, targetRate, recipeSelections })
     }, 500)
     return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetRate])
 
   function handleItemSelect(itemId: string) {
     setSelectedItemId(itemId)
     setRecipeSelections({})
     setResult(null)
-    setShowFullChain(false)
     setCollapsedPaths(new Set())
-    runCalculate({ itemId, targetRate, recipeSelections: {} })
-  }
-
-  function handleToggleFullChain(checked: boolean) {
-    setShowFullChain(checked)
+    runCalculate({ itemId, targetRate, recipeSelections: {} }, true)
   }
 
   function handleRecipeSelect(itemId: string, recipeId: string) {
     const next = { ...recipeSelections, [itemId]: recipeId }
     setRecipeSelections(next)
-    if (selectedItemId) {
-      calculateMutation.mutate(
-        { itemId: selectedItemId, targetRate, recipeSelections: next },
-        { onSuccess: (data) => setResult(data) },
-      )
-    }
+    if (selectedItemId) runCalculate({ itemId: selectedItemId, targetRate, recipeSelections: next })
   }
 
   function handleSavePlan() {
@@ -270,53 +267,119 @@ export default function CalculatorPage() {
     setRecipeSelections(plan.recipeSelections ?? {})
     setCollapsedPaths(new Set())
     setPlansModalOpen(false)
-    calculateMutation.mutate(
+    runCalculate(
       { itemId: plan.itemId, targetRate: plan.targetRate, recipeSelections: plan.recipeSelections ?? {} },
-      {
-        onSuccess: (data) => {
-          setResult(data)
-          setShowFullChain(true)
-        },
-      },
+      true,
     )
   }
 
   const buildingSummary = useMemo(() => {
     if (!result) return []
-    const root = showFullChain ? result.root : trimToDepth(result.root, 0)
-    const agg = aggregateBuildings(root)
+    const agg = aggregateBuildings(result.root)
     return Object.entries(agg)
-      .map(([id, count]) => ({ id, count, name: buildingMap[id]?.displayName ?? id }))
+      .map(([id, count]) => ({
+        id,
+        count,
+        name: buildingMap[id]?.displayName ?? id,
+        iconPath: buildingMap[id]?.iconPath ?? null,
+      }))
       .sort((a, b) => b.count - a.count)
-  }, [result, buildingMap, showFullChain])
+  }, [result, buildingMap])
 
-  const displayPowerMW = result
-    ? showFullChain
-      ? result.totalPowerMW
-      : result.root.powerMW
-    : 0
+  const displayPowerMW = result ? result.totalPowerMW : 0
 
   const displayResources = useMemo(() => {
     if (!result) return []
-    if (showFullChain) {
-      return result.rawResources.map((r) => ({
-        itemId: r.itemId,
-        rate: r.rate,
-        name: itemMap[r.itemId]?.displayName ?? r.itemId,
-        iconPath: itemMap[r.itemId]?.iconPath ?? null,
-      }))
-    }
-    return result.root.children.map((c) => ({
-      itemId: c.itemId,
-      rate: c.targetRate,
-      name: itemMap[c.itemId]?.displayName ?? c.itemId,
-      iconPath: itemMap[c.itemId]?.iconPath ?? null,
+    return result.rawResources.map((r) => ({
+      itemId: r.itemId,
+      rate: r.rate,
+      name: itemMap[r.itemId]?.displayName ?? r.itemId,
+      iconPath: itemMap[r.itemId]?.iconPath ?? null,
     }))
-  }, [result, showFullChain, itemMap])
+  }, [result, itemMap])
+
+  // 데스크톱 사이드바와 모바일 서랍이 같이 씀
+  const itemPicker = (
+    <>
+      <Input
+        placeholder={t('calc.searchPlaceholder')}
+        value={sidebarSearch}
+        onChange={(e) => setSidebarSearch(e.target.value)}
+        allowClear
+        size="small"
+        style={{ flexShrink: 0 }}
+      />
+      <div className={styles.itemList}>
+        {craftableLoading && (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
+            <Spin size="small" />
+          </div>
+        )}
+        {tieredCraftable.map(([tier, items], idx) => (
+          <Fragment key={tier}>
+            <div className={`${styles.tierHeader} ${idx === 0 ? styles.tierHeaderFirst : ''}`}>
+              {tier === 99 ? (
+                <span className={styles.tierBadge}>{t('calc.tierOther')}</span>
+              ) : (
+                <>Tier <span className={styles.tierBadge}>{tier}</span></>
+              )}
+            </div>
+            {items.map((item) => (
+              <div
+                key={item.id}
+                className={`${styles.itemRow} ${selectedItemId === item.id ? styles.itemRowActive : ''}`}
+                onClick={() => {
+                  handleItemSelect(item.id)
+                  setDrawerOpen(false)
+                }}
+              >
+                <ItemIcon iconPath={item.iconPath} size={35} />
+                <span>{item.displayName}</span>
+              </div>
+            ))}
+          </Fragment>
+        ))}
+        {!craftableLoading && filteredCraftable.length === 0 && (
+          <div style={{ color: 'var(--text-faint)', fontSize: 12, padding: '12px 8px' }}>{t('calc.noResults')}</div>
+        )}
+      </div>
+    </>
+  )
+
+  // 계산 설정 | 앱 설정 — 데스크톱은 컨트롤 바 오른쪽, 모바일은 서랍 위쪽
+  const settingsControls = (
+    <>
+      <Select
+        value={conveyorLimitValue}
+        onChange={setConveyorLimitValue}
+        size="small"
+        style={{ width: 170 }}
+        popupMatchSelectWidth={false}
+        options={[
+          { value: 0, label: t('calc.conveyorUnlimited') },
+          ...conveyorBelts.map((c) => ({
+            value: c.itemsPerMin,
+            label: `${c.displayName} — ${c.itemsPerMin}/min`,
+          })),
+        ]}
+      />
+      {minerExtractors.length > 0 && (
+        <Select
+          value={extractorLevel}
+          onChange={handleExtractorLevelChange}
+          size="small"
+          style={{ width: 130 }}
+          options={minerExtractors.map((e) => ({ value: e.id, label: e.displayName }))}
+        />
+      )}
+      <Divider orientation="vertical" style={{ borderColor: 'var(--border-strong)', height: 20, margin: '0 4px' }} />
+      <LanguageSelect />
+    </>
+  )
 
   return (
     <div className={styles.page}>
-      {/* 좌측 사이드바 */}
+      {/* 좌측 사이드바 (데스크톱) */}
       <div className={`${styles.sidebar} ${sidebarOpen ? '' : styles.sidebarCollapsed}`}>
         <div className={styles.sidebarTopBar}>
           <button className={styles.hamburger} onClick={() => setSidebarOpen((v) => !v)}>
@@ -324,103 +387,48 @@ export default function CalculatorPage() {
           </button>
           {sidebarOpen && <span className={styles.sidebarTitle}>{t('common.items')}</span>}
         </div>
-        {sidebarOpen && (
-          <>
-            <Input
-              placeholder={t('calc.searchPlaceholder')}
-              value={sidebarSearch}
-              onChange={(e) => setSidebarSearch(e.target.value)}
-              allowClear
-              size="small"
-              style={{ flexShrink: 0 }}
-            />
-            <div className={styles.itemList}>
-              {craftableLoading && (
-                <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
-                  <Spin size="small" />
-                </div>
-              )}
-              {tieredCraftable.map(([tier, items], idx) => (
-                <Fragment key={tier}>
-                  <div className={`${styles.tierHeader} ${idx === 0 ? styles.tierHeaderFirst : ''}`}>
-                    {tier === 99 ? (
-                      <span className={styles.tierBadge}>{t('calc.tierOther')}</span>
-                    ) : (
-                      <>Tier <span className={styles.tierBadge}>{tier}</span></>
-                    )}
-                  </div>
-                  {items.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`${styles.itemRow} ${selectedItemId === item.id ? styles.itemRowActive : ''}`}
-                      onClick={() => handleItemSelect(item.id)}
-                    >
-                      <ItemIcon iconPath={item.iconPath} size={35} />
-                      <span>{item.displayName}</span>
-                    </div>
-                  ))}
-                </Fragment>
-              ))}
-              {!craftableLoading && filteredCraftable.length === 0 && (
-                <div style={{ color: '#555', fontSize: 12, padding: '12px 8px' }}>{t('calc.noResults')}</div>
-              )}
-            </div>
-          </>
-        )}
+        {sidebarOpen && itemPicker}
       </div>
+
+      {/* 아이템·설정 서랍 (모바일) */}
+      <Drawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        placement="left"
+        size={300}
+        title={t('common.items')}
+        styles={{
+          section: { background: 'var(--bg-panel)' },
+          body: { display: 'flex', flexDirection: 'column', gap: 10, padding: 12 },
+        }}
+      >
+        <div className={styles.drawerSettings}>{settingsControls}</div>
+        {itemPicker}
+      </Drawer>
 
       {/* 메인 영역 */}
       <div className={styles.main}>
-        {/* 컨트롤 바 */}
+        {/* 컨트롤 바 — 모바일에선 서랍 버튼 + 선택 아이템 + 작업 아이콘만 */}
         <div className={styles.controls}>
-          {selectedCraftable && (
-            <div className={styles.selectedItemBadge}>
-              <ItemIcon iconPath={selectedCraftable.iconPath} size={18} />
-              <span>{selectedCraftable.displayName}</span>
-            </div>
-          )}
-          <Checkbox
-            checked={showFullChain}
-            onChange={(e) => handleToggleFullChain(e.target.checked)}
-            disabled={!selectedItemId}
-          >
-            {t('calc.showFullChain')}
-          </Checkbox>
-          {showFullChain && collapsedPaths.size > 0 && (
-            <Button size="small" icon={<EyeOutlined />} onClick={() => setCollapsedPaths(new Set())}>
-              {t('calc.expandAll')}
-            </Button>
-          )}
-          <Select
-            value={conveyorLimitValue}
-            onChange={setConveyorLimitValue}
-            size="small"
-            style={{ width: 170 }}
-            popupMatchSelectWidth={false}
-            options={[
-              { value: 0, label: t('calc.conveyorUnlimited') },
-              ...conveyorBelts.map((c) => ({
-                value: c.itemsPerMin,
-                label: `${c.displayName} — ${c.itemsPerMin}/min`,
-              })),
-            ]}
-          />
-          {minerExtractors.length > 0 && (
-            <Select
-              value={extractorLevel}
-              onChange={setExtractorLevel}
-              size="small"
-              style={{ width: 130 }}
-              options={minerExtractors.map((e) => ({ value: e.id, label: e.displayName }))}
-            />
-          )}
+          <button className={`${styles.hamburger} ${styles.mobileOnly}`} onClick={() => setDrawerOpen(true)}>
+            <MenuOutlined />
+          </button>
+          <div className={`${styles.mobileTitle} ${styles.mobileOnly}`}>
+            {selectedCraftable && (
+              <>
+                <ItemIcon iconPath={selectedCraftable.iconPath} size={22} />
+                <span>{selectedCraftable.displayName}</span>
+              </>
+            )}
+          </div>
+          {/* 작업 */}
           <Button icon={<SaveOutlined />} disabled={!result || !selectedItemId} onClick={() => setSaveModalOpen(true)}>
-            {t('calc.save')}
+            <span className={styles.btnLabel}>{t('calc.save')}</span>
           </Button>
           <Button icon={<FolderOpenOutlined />} onClick={() => setPlansModalOpen(true)}>
-            {t('calc.load')}{plans.length > 0 ? ` (${plans.length})` : ''}
+            <span className={styles.btnLabel}>{t('calc.load')}{plans.length > 0 ? ` (${plans.length})` : ''}</span>
           </Button>
-          <LanguageSelect />
+          <div className={`${styles.controlsRight} ${styles.desktopOnly}`}>{settingsControls}</div>
         </div>
 
         {calculateMutation.isError && (
@@ -430,7 +438,11 @@ export default function CalculatorPage() {
         {/* 아이템 미선택 */}
         {!selectedItemId && (
           <div className={styles.placeholder}>
-            <Empty description={t('calc.selectItem')} />
+            <Empty description={t('calc.selectItem')}>
+              <Button className={styles.mobileOnly} onClick={() => setDrawerOpen(true)}>
+                {t('calc.openItems')}
+              </Button>
+            </Empty>
           </div>
         )}
 
@@ -438,7 +450,7 @@ export default function CalculatorPage() {
         {selectedItemId && (
           <div className={styles.body}>
             {/* 요약 패널 — 아이템 선택 시 항상 표시 */}
-            <div className={styles.summary}>
+            <div className={`${styles.summary} ${detailsOpen ? styles.summaryOpen : ''}`}>
               {selectedCraftable && (
                 <div className={styles.summaryHeader}>
                   <ItemIcon iconPath={selectedCraftable.iconPath} size={35} />
@@ -448,13 +460,13 @@ export default function CalculatorPage() {
 
               {/* 생산량 입력 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0 4px' }}>
-                <span style={{ fontSize: 14, color: '#888' }}>{t('calc.targetRate')}</span>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t('calc.targetRate')}</span>
                 <InputNumber
                   value={targetRate}
                   onChange={(v) => setTargetRate(v ?? 1)}
                   min={0.001}
                   step={10}
-                  addonAfter="/min"
+                  suffix="/min"
                   size="small"
                   style={{ width: 130 }}
                 />
@@ -463,38 +475,50 @@ export default function CalculatorPage() {
               {result && (
                 <>
                   <div className={styles.statRow}>
-                    <ThunderboltOutlined style={{ color: '#e8b84b' }} />
-                    <span style={{ color: '#ccc', flex: 1, fontSize: 14 }}>{t('calc.totalPower')}</span>
-                    <span style={{ color: '#e8b84b', fontWeight: 700, fontSize: 14 }}>
+                    <ThunderboltOutlined style={{ color: 'var(--accent)' }} />
+                    <span style={{ color: 'var(--text)', flex: 1, fontSize: 14 }}>{t('calc.totalPower')}</span>
+                    <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 14 }}>
                       {displayPowerMW.toFixed(1)} MW
                     </span>
+                    <Button
+                      type="link"
+                      size="small"
+                      className={styles.mobileOnly}
+                      onClick={() => setDetailsOpen((v) => !v)}
+                    >
+                      {detailsOpen ? t('calc.hideDetails') : t('calc.showDetails')}
+                    </Button>
                   </div>
 
-                  <Divider style={{ borderColor: '#1e1e30', margin: '10px 0' }} />
+                  {/* 모바일에선 접혀 있다가 상세 버튼으로 펼침 */}
+                  <div className={styles.summaryDetails}>
+                    <Divider style={{ borderColor: 'var(--border)', margin: '10px 0' }} />
 
-                  <div className={styles.rawLabel}>{t('common.buildings')}</div>
-                  <div className={styles.summaryList}>
-                    {buildingSummary.map((b) => (
-                      <div key={b.id} className={styles.summaryRow}>
-                        <span className={styles.summaryRowName}>{b.name}</span>
-                        <Tag color="gold" style={{ margin: 0, fontSize: 13 }}>×{b.count}</Tag>
-                      </div>
-                    ))}
-                  </div>
+                    <div className={styles.rawLabel}>{t('common.buildings')}</div>
+                    <div className={styles.summaryList}>
+                      {buildingSummary.map((b) => (
+                        <div key={b.id} className={styles.summaryRow}>
+                          <ItemIcon iconPath={b.iconPath} size={32} />
+                          <span className={styles.summaryRowName}>{b.name}</span>
+                          <Tag color="gold" style={{ margin: 0, fontSize: 13 }}>×{b.count}</Tag>
+                        </div>
+                      ))}
+                    </div>
 
-                  <Divider style={{ borderColor: '#1e1e30', margin: '10px 0' }} />
+                    <Divider style={{ borderColor: 'var(--border)', margin: '10px 0' }} />
 
-                  <div className={styles.rawLabel}>{showFullChain ? t('calc.rawResources') : t('calc.requiredInputs')}</div>
-                  <div className={styles.summaryList}>
-                    {displayResources.map((r) => (
-                      <div key={r.itemId} className={styles.summaryRow}>
-                        <ItemIcon iconPath={r.iconPath} size={32} />
-                        <span className={styles.summaryRowName}>{r.name}</span>
-                        <span style={{ color: '#7ab8b8', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
-                          {Number.isInteger(r.rate) ? r.rate : parseFloat(r.rate.toFixed(2))}
-                        </span>
-                      </div>
-                    ))}
+                    <div className={styles.rawLabel}>{t('calc.rawResources')}</div>
+                    <div className={styles.summaryList}>
+                      {displayResources.map((r) => (
+                        <div key={r.itemId} className={styles.summaryRow}>
+                          <ItemIcon iconPath={r.iconPath} size={32} />
+                          <span className={styles.summaryRowName}>{r.name}</span>
+                          <span style={{ color: 'var(--rate)', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
+                            {Number.isInteger(r.rate) ? r.rate : parseFloat(r.rate.toFixed(2))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </>
               )}
@@ -502,26 +526,30 @@ export default function CalculatorPage() {
 
             {/* 체인 시각화 */}
             <div className={styles.chainArea}>
-              {calculateMutation.isPending ? (
+              {/* 첫 계산만 전체 스피너. 재계산 중엔 기존 그래프를 두고 우상단 스피너만 — 다시 그리면 줌/위치가 초기화됨 */}
+              {!result && calculateMutation.isPending ? (
                 <div className={styles.loadingCenter}>
                   <Spin size="large" />
                 </div>
               ) : result ? (
                 Object.keys(recipeMap).length > 0 ? (
-                  <ChainTree
-                    key={`${selectedItemId}_${showFullChain}_${targetRate}`}
-                    chainResult={showFullChain ? result.root : trimToDepth(result.root, 1)}
-                    itemMap={itemMap}
-                    buildingMap={buildingMap}
-                    recipeMap={recipeMap}
-                    recipeSelections={recipeSelections}
-                    onRecipeSelect={handleRecipeSelect}
-                    rawNodeSettings={rawNodeSettings}
-                    onRawSettingsChange={handleRawSettingsChange}
-                    conveyorLimit={conveyorLimit}
-                    collapsedPaths={collapsedPaths}
-                    onToggleCollapse={handleToggleCollapse}
-                  />
+                  <>
+                    {calculateMutation.isPending && <Spin className={styles.recalcSpin} />}
+                    <ChainTree
+                      key={result.root.itemId}
+                      chainResult={result.root}
+                      itemMap={itemMap}
+                      buildingMap={buildingMap}
+                      recipeMap={recipeMap}
+                      recipeSelections={recipeSelections}
+                      onRecipeSelect={handleRecipeSelect}
+                      rawNodeSettings={rawNodeSettings}
+                      onRawSettingsChange={handleRawSettingsChange}
+                      conveyorLimit={conveyorLimit}
+                      collapsedPaths={collapsedPaths}
+                      onCollapsedPathsChange={setCollapsedPaths}
+                    />
+                  </>
                 ) : (
                   <Empty description={t('calc.loadingRecipes')} />
                 )

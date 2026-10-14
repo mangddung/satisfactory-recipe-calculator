@@ -27,7 +27,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   onRecipeSelect: (itemId: string, recipeId: string) => void
   extractorSuggestion: ExtractorSuggestion | null
   rawSettings: RawNodeSettings | null
-  onRawSettingsChange: ((itemId: string, settings: RawNodeSettings) => void) | null
+  onRawSettingsChange: ((pathKey: string, settings: RawNodeSettings) => void) | null
   itemAcquisition: string
   isCycle: boolean   // 상위 단계와 같은 아이템이라 백엔드가 전개를 멈춘 노드
   pathKey: string    // 루트부터 itemId 를 '>' 로 이은 트리 경로 — 접힘 상태 키
@@ -66,6 +66,32 @@ function collectDescendantIds(node: ChainNode, acc: Set<string>): Set<string> {
   return acc
 }
 
+// 루트(0)부터 가장 깊은 노드까지의 단계 수
+export function chainDepth(node: ChainNode): number {
+  return node.children.reduce((m, c) => Math.max(m, 1 + chainDepth(c)), 0)
+}
+
+// depth 단계까지 보일 노드 수 (루트 포함)
+export function countNodesToDepth(node: ChainNode, depth: number): number {
+  if (depth <= 0) return 1
+  return node.children.reduce((sum, c) => sum + countNodesToDepth(c, depth - 1), 1)
+}
+
+// depth 단계 노드를 접는 경로 집합 — traverse 의 pathKey·canCollapse 규칙과 같아야 함. Infinity = 다 펼침
+export function collapsedPathsAtDepth(
+  node: ChainNode,
+  depth: number,
+  path = node.itemId,
+  acc = new Set<string>(),
+): Set<string> {
+  if (depth === 0) {
+    if (node.recipe && node.children.length > 0) acc.add(path)
+    return acc
+  }
+  for (const c of node.children) collapsedPathsAtDepth(c, depth - 1, `${path}>${c.itemId}`, acc)
+  return acc
+}
+
 function traverse(
   node: ChainNode,
   parentId: string | null,
@@ -76,7 +102,7 @@ function traverse(
   recipeMap: Record<string, Recipe>,
   onRecipeSelect: (itemId: string, recipeId: string) => void,
   rawNodeSettings: Record<string, RawNodeSettings>,
-  onRawSettingsChange: (itemId: string, settings: RawNodeSettings) => void,
+  onRawSettingsChange: (pathKey: string, settings: RawNodeSettings) => void,
   conveyorLimit: number,
   collapsedPaths: Set<string>,
   onToggleCollapse: (pathKey: string) => void,
@@ -120,7 +146,7 @@ function traverse(
       byproductOutputs: node.byproductOutputs,
       onRecipeSelect,
       extractorSuggestion: node.extractorSuggestion ?? null,
-      rawSettings: rawNodeSettings[node.itemId] ?? null,
+      rawSettings: rawNodeSettings[pathKey] ?? null,
       onRawSettingsChange,
       itemAcquisition: item?.acquisition ?? 'miner',
       isCycle: isRaw && ancestors.has(node.itemId),
@@ -169,7 +195,7 @@ export function buildFlowGraph(
   recipeMap: Record<string, Recipe>,
   onRecipeSelect: (itemId: string, recipeId: string) => void,
   rawNodeSettings: Record<string, RawNodeSettings>,
-  onRawSettingsChange: (itemId: string, settings: RawNodeSettings) => void,
+  onRawSettingsChange: (pathKey: string, settings: RawNodeSettings) => void,
   conveyorLimit: number,
   collapsedPaths: Set<string>,
   onToggleCollapse: (pathKey: string) => void,

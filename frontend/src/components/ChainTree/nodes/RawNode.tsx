@@ -137,8 +137,8 @@ export default function RawNode({ data }: NodeProps<FlowNode>) {
           targetRate={data.targetRate}
           settings={rawSettings}
           acquisitionType={acquisitionType}
-          onConfirm={(id, newSettings) => {
-            onRawSettingsChange?.(id, newSettings)
+          onConfirm={(_, newSettings) => {
+            onRawSettingsChange?.(data.pathKey, newSettings)
             setModalOpen(false)
           }}
           onClose={() => setModalOpen(false)}

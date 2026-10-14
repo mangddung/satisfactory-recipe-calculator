@@ -25,7 +25,6 @@ const ko = {
   'calc.searchPlaceholder': '검색...',
   'calc.tierOther': '기타',
   'calc.noResults': '결과 없음',
-  'calc.showFullChain': '전체 레시피 보기',
   'calc.conveyorUnlimited': '컨베이어: 무제한',
   'calc.save': '저장',
   'calc.load': '불러오기',
@@ -34,7 +33,6 @@ const ko = {
   'calc.targetRate': '생산량',
   'calc.totalPower': '총 전력',
   'calc.rawResources': '원자재 (분당)',
-  'calc.requiredInputs': '필요 재료 (분당)',
   'calc.loadingRecipes': '레시피 데이터 로딩 중...',
   'calc.calculating': '계산 중...',
   'calc.savePlan': '플랜 저장',
@@ -44,7 +42,9 @@ const ko = {
   'calc.item': '아이템',
   'calc.loadPlan': '로드',
   'calc.deleted': '삭제됨',
-  'calc.expandAll': '모두 펼치기',
+  'calc.showDetails': '상세 보기',
+  'calc.hideDetails': '접기',
+  'calc.openItems': '아이템 선택',
 
   // 체인 노드
   'node.settings': '설정',
@@ -171,6 +171,8 @@ const ko = {
   'buildings.somersloopSlots': '소머슬룹 슬롯',
 
   'chain.title': '{name} — 재료 체인',
+  'chain.depth': '{n}단계',
+  'chain.depthAll': '전체',
 
   'extractors.title': '추출기 시설',
   'extractors.searchPlaceholder': '이름 검색...',
