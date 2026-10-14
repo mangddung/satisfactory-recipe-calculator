@@ -1,9 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Table, Input, Tag } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '../../api'
+import { useExtractors } from '../../api/calculator'
 import { useLang, type TKey } from '../../i18n'
-import type { Extractor } from '../../types'
 
 const ACQUISITION_COLORS: Record<string, string> = {
   miner: 'blue',
@@ -23,13 +21,7 @@ export default function ExtractorsTab() {
   const { t } = useLang()
   const [search, setSearch] = useState('')
 
-  const { data: extractorMap = {}, isLoading } = useQuery({
-    queryKey: ['extractors'],
-    queryFn: () =>
-      apiFetch<{ extractors: Record<string, Extractor> }>('/api/extractors').then(
-        (r) => r.extractors,
-      ),
-  })
+  const { data: extractorMap = {}, isLoading } = useExtractors()
 
   const extractors = useMemo(
     () => Object.values(extractorMap).sort((a, b) => a.baseRatePerMin - b.baseRatePerMin),

@@ -9,13 +9,6 @@ export type Acquisition =
   | 'other'
   | 'unclassified'
 
-export const RAW_ACQUISITIONS = new Set<Acquisition>([
-  'miner',
-  'oil_extractor',
-  'water_extractor',
-  'resource_well',
-])
-
 export interface Item {
   id: string
   displayName: string

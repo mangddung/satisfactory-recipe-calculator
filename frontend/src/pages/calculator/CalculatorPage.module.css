@@ -264,12 +264,6 @@
   white-space: nowrap;
 }
 
-.summaryRate {
-  color: #aaa;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
 .statRow {
   display: flex;
   align-items: center;

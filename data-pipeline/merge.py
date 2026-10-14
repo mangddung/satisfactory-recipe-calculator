@@ -18,7 +18,6 @@ import logging
 import re
 import shutil
 from pathlib import Path
-from typing import Any
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -86,7 +85,6 @@ def apply_patch(data: dict, patch: dict) -> tuple[dict, list[str]]:
             logger.info(f"값 교체: {target}.{field}: {old_value} → {value}")
         elif isinstance(value, dict):
             # 전체 항목 교체
-            old_item = data[target]
             data[target] = copy.deepcopy(value)
             logger.info(f"항목 교체: {target}")
         else:

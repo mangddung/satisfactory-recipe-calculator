@@ -29,16 +29,3 @@ export function computeSupply(
     return sum + nodeSupply(ext, n, purityMultipliers)
   }, 0)
 }
-
-export function defaultExtractorId(
-  acquisitionType: string,
-  extractors: Record<string, Extractor>,
-): string {
-  const candidates = Object.values(extractors).filter(
-    (e) => e.acquisitionType === acquisitionType,
-  )
-  if (candidates.length === 0) return ''
-  return candidates.reduce((best, e) =>
-    e.baseRatePerMin > best.baseRatePerMin ? e : best,
-  ).id
-}

@@ -40,27 +40,6 @@ def _find_chain_recipe(item_id: str, recipe_selections: dict, recipes: dict) -> 
     return _find_primary_recipe(item_id, recipes)
 
 
-def _collect_chain_ingredients(
-    recipe_id: str,
-    recipes: dict,
-    recipe_selections: dict,
-    visited: set | None = None,
-) -> set:
-    if visited is None:
-        visited = set()
-    r = recipes.get(recipe_id)
-    if not r or recipe_id in visited:
-        return set()
-    visited.add(recipe_id)
-    items: set = set()
-    for ing in r.get('ingredients', []):
-        items.add(ing['item'])
-        sub = _find_chain_recipe(ing['item'], recipe_selections, recipes)
-        if sub:
-            items |= _collect_chain_ingredients(sub['id'], recipes, recipe_selections, visited)
-    return items
-
-
 def _calc_rate(amount: float, duration: float) -> float | None:
     if not duration or duration <= 0:
         return None
