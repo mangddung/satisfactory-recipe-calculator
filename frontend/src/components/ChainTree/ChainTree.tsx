@@ -30,6 +30,8 @@ interface ChainTreeProps {
   rawNodeSettings: Record<string, RawNodeSettings>
   onRawSettingsChange: (itemId: string, settings: RawNodeSettings) => void
   conveyorLimit: number
+  collapsedPaths: Set<string>
+  onToggleCollapse: (pathKey: string) => void
 }
 
 export default function ChainTree({
@@ -41,15 +43,18 @@ export default function ChainTree({
   rawNodeSettings,
   onRawSettingsChange,
   conveyorLimit,
+  collapsedPaths,
+  onToggleCollapse,
 }: ChainTreeProps) {
   const { nodes, edges } = useMemo(
     () =>
       buildFlowGraph(
         chainResult, itemMap, buildingMap, recipeMap, onRecipeSelect,
         rawNodeSettings, onRawSettingsChange, conveyorLimit,
+        collapsedPaths, onToggleCollapse,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chainResult, itemMap, buildingMap, recipeMap, rawNodeSettings, conveyorLimit],
+    [chainResult, itemMap, buildingMap, recipeMap, rawNodeSettings, conveyorLimit, collapsedPaths],
   )
 
   return (

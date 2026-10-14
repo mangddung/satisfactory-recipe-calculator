@@ -44,6 +44,7 @@ const ko = {
   'calc.item': '아이템',
   'calc.loadPlan': '로드',
   'calc.deleted': '삭제됨',
+  'calc.expandAll': '모두 펼치기',
 
   // 체인 노드
   'node.settings': '설정',
@@ -53,6 +54,8 @@ const ko = {
   'node.defaultRecipe': '{name} (기본)',
   'node.byproductUsed': '↑ 체인 사용',
   'node.cycle': '⟳ 순환 — 상위 단계에서 생산',
+  'node.hideChildren': '하위 재료 숨기기',
+  'node.showChildren': '하위 재료 보기',
 
   // 노드 설정 모달
   'nodeSettings.title': '{name} 노드 설정',

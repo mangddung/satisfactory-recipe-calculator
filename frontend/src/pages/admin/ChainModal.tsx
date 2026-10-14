@@ -17,6 +17,7 @@ interface Props {
 export default function ChainModal({ recipe, onClose }: Props) {
   const { t } = useLang()
   const [recipeSelections, setRecipeSelections] = useState<Record<string, string>>({})
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set())
 
   const { data: items = [] } = useItems()
   const { data: recipes = [] } = useRecipes()
@@ -93,6 +94,12 @@ export default function ChainModal({ recipe, onClose }: Props) {
             rawNodeSettings={NO_RAW_SETTINGS}
             onRawSettingsChange={() => {}}
             conveyorLimit={Infinity}
+            collapsedPaths={collapsedPaths}
+            onToggleCollapse={(pathKey) => setCollapsedPaths((prev) => {
+              const next = new Set(prev)
+              if (!next.delete(pathKey)) next.add(pathKey)
+              return next
+            })}
           />
         </div>
       )}

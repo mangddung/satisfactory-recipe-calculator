@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Select } from 'antd'
+import { Button, Select, Tooltip } from 'antd'
+import { EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import ItemIcon from '../../ItemIcon'
 import { useLang } from '../../../i18n'
 import type { FlowNode } from '../flowUtils'
@@ -8,6 +9,11 @@ function fmtNum(n: number): string {
   if (n === 0) return '0'
   if (n === Math.floor(n)) return n.toString()
   return parseFloat(n.toFixed(2)).toString()
+}
+
+function stopProp(e: React.PointerEvent) {
+  e.stopPropagation()
+  e.nativeEvent.stopImmediatePropagation()
 }
 
 interface Props extends NodeProps<FlowNode> {
@@ -33,6 +39,33 @@ export default function ProductionNode({ data, isRoot = false }: Props) {
       <Handle type="target" position={Position.Left} style={{ background: '#c89a30', width: 8, height: 8 }} />
       {!isRoot && <Handle type="source" position={Position.Right} style={{ background: '#4a7aaa', width: 8, height: 8 }} />}
 
+      {/* 접힘 칩 — 입력 핸들 왼쪽, 숨긴 하위 노드 수 */}
+      {data.collapsed && (
+        <div
+          className="nodrag nopan"
+          onPointerDown={stopProp}
+          onClick={() => data.onToggleCollapse(data.pathKey)}
+          title={t('node.showChildren')}
+          style={{
+            position: 'absolute',
+            right: '100%',
+            top: '50%',
+            transform: 'translate(-10px, -50%)',
+            padding: '1px 7px',
+            borderRadius: 10,
+            border: '1px solid #c89a30',
+            background: '#140f00',
+            color: '#e8b84b',
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          +{data.hiddenCount}
+        </div>
+      )}
+
       {/* 아이템 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
         <ItemIcon iconPath={data.iconPath} size={28} />
@@ -44,6 +77,19 @@ export default function ProductionNode({ data, isRoot = false }: Props) {
             {data.buildingName}
           </div>
         </div>
+        {data.canCollapse && (
+          <div className="nodrag nopan" onPointerDown={stopProp}>
+            <Tooltip title={data.collapsed ? t('node.showChildren') : t('node.hideChildren')}>
+              <Button
+                type="text"
+                size="small"
+                icon={data.collapsed ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                style={{ color: data.collapsed ? '#e8b84b' : '#5a7a9a' }}
+                onClick={() => data.onToggleCollapse(data.pathKey)}
+              />
+            </Tooltip>
+          </div>
+        )}
       </div>
 
       <div style={{ borderTop: '1px solid #181830', marginBottom: 7 }} />

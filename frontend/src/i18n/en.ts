@@ -44,6 +44,7 @@ const en: Record<keyof typeof ko, string> = {
   'calc.item': 'Item',
   'calc.loadPlan': 'Load',
   'calc.deleted': 'Deleted',
+  'calc.expandAll': 'Expand all',
 
   'node.settings': 'Settings',
   'node.required': 'Need {rate}/min',
@@ -52,6 +53,8 @@ const en: Record<keyof typeof ko, string> = {
   'node.defaultRecipe': '{name} (default)',
   'node.byproductUsed': '↑ Used in chain',
   'node.cycle': '⟳ Cycle — produced upstream',
+  'node.hideChildren': 'Hide ingredients',
+  'node.showChildren': 'Show ingredients',
 
   'nodeSettings.title': '{name} node settings',
   'nodeSettings.requiredSupply': 'Required supply:',

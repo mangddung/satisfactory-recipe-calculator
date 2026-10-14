@@ -30,6 +30,11 @@ export interface FlowNodeData extends Record<string, unknown> {
   onRawSettingsChange: ((itemId: string, settings: RawNodeSettings) => void) | null
   itemAcquisition: string
   isCycle: boolean   // 상위 단계와 같은 아이템이라 백엔드가 전개를 멈춘 노드
+  pathKey: string    // 루트부터 itemId 를 '>' 로 이은 트리 경로 — 접힘 상태 키
+  canCollapse: boolean
+  collapsed: boolean
+  hiddenCount: number
+  onToggleCollapse: (pathKey: string) => void
 }
 
 export type FlowNode = Node<FlowNodeData, FlowNodeType>
@@ -49,9 +54,22 @@ function getAltRecipes(itemId: string, recipeMap: Record<string, Recipe>): Recip
   )
 }
 
+function countDescendants(node: ChainNode): number {
+  return node.children.reduce((sum, c) => sum + 1 + countDescendants(c), 0)
+}
+
+function collectDescendantIds(node: ChainNode, acc: Set<string>): Set<string> {
+  for (const c of node.children) {
+    acc.add(c.itemId)
+    collectDescendantIds(c, acc)
+  }
+  return acc
+}
+
 function traverse(
   node: ChainNode,
   parentId: string | null,
+  parentPath: string | null,
   isRoot: boolean,
   itemMap: Record<string, Item>,
   buildingMap: Record<string, { displayName: string }>,
@@ -60,6 +78,8 @@ function traverse(
   rawNodeSettings: Record<string, RawNodeSettings>,
   onRawSettingsChange: (itemId: string, settings: RawNodeSettings) => void,
   conveyorLimit: number,
+  collapsedPaths: Set<string>,
+  onToggleCollapse: (pathKey: string) => void,
   nodes: FlowNode[],
   edges: Edge[],
   counter: Map<string, number>,
@@ -72,6 +92,10 @@ function traverse(
   const item = itemMap[node.itemId]
   const isRaw = !node.recipe
   const nodeType: FlowNodeType = isRoot ? 'root' : isRaw ? 'raw' : 'production'
+
+  const pathKey = parentPath === null ? node.itemId : `${parentPath}>${node.itemId}`
+  const canCollapse = nodeType === 'production' && node.children.length > 0
+  const collapsed = canCollapse && collapsedPaths.has(pathKey)
 
   const buildingId = (node.recipe?.producedIn ?? [])[0] ?? null
   const buildingName = buildingId ? (buildingMap[buildingId]?.displayName ?? buildingId) : ''
@@ -100,6 +124,11 @@ function traverse(
       onRawSettingsChange,
       itemAcquisition: item?.acquisition ?? 'miner',
       isCycle: isRaw && ancestors.has(node.itemId),
+      pathKey,
+      canCollapse,
+      collapsed,
+      hiddenCount: collapsed ? countDescendants(node) : 0,
+      onToggleCollapse,
     },
   })
 
@@ -117,13 +146,16 @@ function traverse(
     })
   }
 
+  if (collapsed) return nodeId
+
   const childAncestors = new Set(ancestors).add(node.itemId)
   for (const child of node.children) {
     traverse(
-      child, nodeId, false,
+      child, nodeId, pathKey, false,
       itemMap, buildingMap, recipeMap, onRecipeSelect,
       rawNodeSettings, onRawSettingsChange,
-      conveyorLimit, nodes, edges, counter, childAncestors,
+      conveyorLimit, collapsedPaths, onToggleCollapse,
+      nodes, edges, counter, childAncestors,
     )
   }
 
@@ -139,21 +171,22 @@ export function buildFlowGraph(
   rawNodeSettings: Record<string, RawNodeSettings>,
   onRawSettingsChange: (itemId: string, settings: RawNodeSettings) => void,
   conveyorLimit: number,
+  collapsedPaths: Set<string>,
+  onToggleCollapse: (pathKey: string) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const mainNodes: FlowNode[] = []
   const mainEdges: Edge[] = []
 
   traverse(
-    chainRoot, null, true,
+    chainRoot, null, null, true,
     itemMap, buildingMap, recipeMap, onRecipeSelect,
     rawNodeSettings, onRawSettingsChange,
-    conveyorLimit, mainNodes, mainEdges, new Map(), new Set(),
+    conveyorLimit, collapsedPaths, onToggleCollapse,
+    mainNodes, mainEdges, new Map(), new Set(),
   )
 
-  // 루트를 뺀 모든 노드 = 체인 어딘가의 재료
-  const chainIngredients = new Set(
-    mainNodes.filter((n) => n.type !== 'root').map((n) => n.data.itemId),
-  )
+  // 루트를 뺀 모든 노드 = 체인 어딘가의 재료 (접혀서 안 보이는 노드 포함)
+  const chainIngredients = collectDescendantIds(chainRoot, new Set())
 
   const g = new graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))

@@ -20,6 +20,7 @@ import {
   DeleteOutlined,
   ThunderboltOutlined,
   MenuOutlined,
+  EyeOutlined,
 } from '@ant-design/icons'
 import {
   useCraftableItems,
@@ -104,6 +105,7 @@ export default function CalculatorPage() {
   const [result, setResult] = useState<CalculationResult | null>(null)
   const [showFullChain, setShowFullChain] = useState(false)
   const [rawNodeSettings, setRawNodeSettings] = useState<Record<string, RawNodeSettings>>({})
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set())
   const [conveyorLimitValue, setConveyorLimitValue] = useState<number>(
     () => Number(getCookie('sc_conveyor') ?? '0'),
   )
@@ -199,6 +201,14 @@ export default function CalculatorPage() {
     [],
   )
 
+  const handleToggleCollapse = useCallback((pathKey: string) => {
+    setCollapsedPaths((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(pathKey)) next.add(pathKey)
+      return next
+    })
+  }, [])
+
   function runCalculate(payload: { itemId: string; targetRate: number; recipeSelections: Record<string, string> }) {
     calculateMutation.mutate(payload, {
       onSuccess: (data) => setResult(data),
@@ -220,6 +230,7 @@ export default function CalculatorPage() {
     setRecipeSelections({})
     setResult(null)
     setShowFullChain(false)
+    setCollapsedPaths(new Set())
     runCalculate({ itemId, targetRate, recipeSelections: {} })
   }
 
@@ -257,6 +268,7 @@ export default function CalculatorPage() {
     setSelectedItemId(plan.itemId)
     setTargetRate(plan.targetRate)
     setRecipeSelections(plan.recipeSelections ?? {})
+    setCollapsedPaths(new Set())
     setPlansModalOpen(false)
     calculateMutation.mutate(
       { itemId: plan.itemId, targetRate: plan.targetRate, recipeSelections: plan.recipeSelections ?? {} },
@@ -374,6 +386,11 @@ export default function CalculatorPage() {
           >
             {t('calc.showFullChain')}
           </Checkbox>
+          {showFullChain && collapsedPaths.size > 0 && (
+            <Button size="small" icon={<EyeOutlined />} onClick={() => setCollapsedPaths(new Set())}>
+              {t('calc.expandAll')}
+            </Button>
+          )}
           <Select
             value={conveyorLimitValue}
             onChange={setConveyorLimitValue}
@@ -502,6 +519,8 @@ export default function CalculatorPage() {
                     rawNodeSettings={rawNodeSettings}
                     onRawSettingsChange={handleRawSettingsChange}
                     conveyorLimit={conveyorLimit}
+                    collapsedPaths={collapsedPaths}
+                    onToggleCollapse={handleToggleCollapse}
                   />
                 ) : (
                   <Empty description={t('calc.loadingRecipes')} />
