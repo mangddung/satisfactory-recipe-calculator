@@ -617,7 +617,7 @@ def api_public_buildings():
             "buildingCategory": d.get("buildingCategory"),
             "powerConsumption": d.get("powerConsumption"),
             "somersloopSlots": d.get("somersloopSlots"),
-            "iconPath": None,
+            "iconPath": d.get("iconPath") if _icon_exists(d.get("iconPath") or "") else None,
         }
         for bid, d in buildings.items()
     ]
