@@ -93,6 +93,41 @@
   padding: 16px 4px 5px;
   user-select: none;
   flex-shrink: 0;
+  width: 100%;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tierHeader:hover:not(:disabled) {
+  color: var(--info);
+}
+
+.tierHeader:disabled {
+  cursor: default;
+}
+
+.tierHeader:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: 4px;
+}
+
+.tierCaret {
+  font-size: 9px;
+  transition: transform 0.15s;
+}
+
+.tierCaretOpen {
+  transform: rotate(90deg);
+}
+
+.tierCount {
+  color: var(--text-faint);
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .tierHeader::after {

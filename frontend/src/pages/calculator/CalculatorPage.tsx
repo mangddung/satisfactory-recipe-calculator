@@ -20,6 +20,7 @@ import {
   DeleteOutlined,
   ThunderboltOutlined,
   MenuOutlined,
+  RightOutlined,
 } from '@ant-design/icons'
 import {
   useCraftableItems,
@@ -121,6 +122,7 @@ export default function CalculatorPage() {
   const [planName, setPlanName] = useState('')
   const [plansModalOpen, setPlansModalOpen] = useState(false)
   const [sidebarSearch, setSidebarSearch] = useState('')
+  const [collapsedTiers, setCollapsedTiers] = useState<Set<number>>(new Set())
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 모바일 전용: 아이템·설정 서랍, 요약 상세(건물·원자재) 펼침
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -187,6 +189,15 @@ export default function CalculatorPage() {
   }, [filteredCraftable])
 
   const selectedCraftable = craftable.find((c) => c.id === selectedItemId)
+  const searching = sidebarSearch.trim() !== ''
+
+  function toggleTier(tier: number) {
+    setCollapsedTiers((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(tier)) next.add(tier)
+      return next
+    })
+  }
 
   // 결과가 바뀌거나 채굴기 등급을 바꿀 때 원자재 노드 설정을 기본값으로 되돌림
   function rawDefaultsFor(data: CalculationResult, minerId = extractorLevel) {
@@ -315,30 +326,41 @@ export default function CalculatorPage() {
             <Spin size="small" />
           </div>
         )}
-        {tieredCraftable.map(([tier, items], idx) => (
-          <Fragment key={tier}>
-            <div className={`${styles.tierHeader} ${idx === 0 ? styles.tierHeaderFirst : ''}`}>
-              {tier === 99 ? (
-                <span className={styles.tierBadge}>{t('calc.tierOther')}</span>
-              ) : (
-                <>Tier <span className={styles.tierBadge}>{tier}</span></>
-              )}
-            </div>
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className={`${styles.itemRow} ${selectedItemId === item.id ? styles.itemRowActive : ''}`}
-                onClick={() => {
-                  handleItemSelect(item.id)
-                  setDrawerOpen(false)
-                }}
+        {tieredCraftable.map(([tier, items], idx) => {
+          const open = searching || !collapsedTiers.has(tier) // 검색 중엔 결과를 숨기지 않게 전부 펼침
+          return (
+            <Fragment key={tier}>
+              <button
+                type="button"
+                className={`${styles.tierHeader} ${idx === 0 ? styles.tierHeaderFirst : ''}`}
+                aria-expanded={open}
+                disabled={searching}
+                onClick={() => toggleTier(tier)}
               >
-                <ItemIcon iconPath={item.iconPath} size={35} />
-                <span>{item.displayName}</span>
-              </div>
-            ))}
-          </Fragment>
-        ))}
+                <RightOutlined className={`${styles.tierCaret} ${open ? styles.tierCaretOpen : ''}`} />
+                {tier === 99 ? (
+                  <span className={styles.tierBadge}>{t('calc.tierOther')}</span>
+                ) : (
+                  <>Tier <span className={styles.tierBadge}>{tier}</span></>
+                )}
+                <span className={styles.tierCount}>{items.length}</span>
+              </button>
+              {open && items.map((item) => (
+                <div
+                  key={item.id}
+                  className={`${styles.itemRow} ${selectedItemId === item.id ? styles.itemRowActive : ''}`}
+                  onClick={() => {
+                    handleItemSelect(item.id)
+                    setDrawerOpen(false)
+                  }}
+                >
+                  <ItemIcon iconPath={item.iconPath} size={35} />
+                  <span>{item.displayName}</span>
+                </div>
+              ))}
+            </Fragment>
+          )
+        })}
         {!craftableLoading && filteredCraftable.length === 0 && (
           <div style={{ color: 'var(--text-faint)', fontSize: 12, padding: '12px 8px' }}>{t('calc.noResults')}</div>
         )}
