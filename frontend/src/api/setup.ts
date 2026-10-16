@@ -7,10 +7,18 @@ export interface LanguageFile {
   bytes: number
 }
 
+// game-data tier (null = none) earlier than the earliest tier it can be automated
+export interface TierMismatch {
+  item: string
+  from: number | null
+  to: number
+}
+
 export interface SetupResult {
   languages: string[]
   defaultLanguage: string
   icons: { needed: number; copied: number; missing: string[] }
+  tiers?: { fixed: boolean; mismatches: TierMismatch[] } // absent in setup.json written before tier correction existed
   generatedAt: string
 }
 
@@ -49,7 +57,7 @@ export function useSetupStatus() {
 export function useRunSetup() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { languages: string[]; defaultLanguage: string }) =>
+    mutationFn: (body: { languages: string[]; defaultLanguage: string; fixTiers: boolean }) =>
       apiFetch<{ ok: true; setup: SetupResult }>('/api/setup/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

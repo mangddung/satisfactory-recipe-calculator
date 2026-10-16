@@ -325,8 +325,9 @@ def _is_progression_schematic(class_name: str, tier: int) -> bool:
     return True
 
 
-def _extract_tier_from_docs(docs_json_path: Path, recipes: dict) -> dict:
-    """ko.json/Docs.json의 FGSchematic에서 아이템별 최초 해금 Tier를 추출."""
+def _extract_tier_from_docs(docs_json_path: Path, recipes: dict) -> tuple[dict, dict]:
+    """ko.json/Docs.json의 FGSchematic에서 아이템별 최초 해금 Tier와
+    레시피별 해금 출처 [(tier, MAM 연구 여부)]를 추출."""
     raw = None
     for enc in ('utf-16', 'utf-8', 'utf-8-sig'):
         try:
@@ -337,16 +338,17 @@ def _extract_tier_from_docs(docs_json_path: Path, recipes: dict) -> dict:
             continue
     if raw is None:
         logger.warning(f"Tier enrichment: {docs_json_path.name} 인코딩 파싱 실패")
-        return {}
+        return {}, {}
 
     schematics_entry = next(
         (e for e in raw if 'FGSchematic' in e.get('NativeClass', '')), None
     )
     if not schematics_entry:
         logger.warning("Tier enrichment: FGSchematic 데이터 없음")
-        return {}
+        return {}, {}
 
     recipe_tier: dict[str, int] = {}
+    recipe_sources: dict[str, list[tuple[int, bool]]] = {}
     skipped = 0
     for s in schematics_entry['Classes']:
         cn = s.get('ClassName', '')
@@ -354,9 +356,11 @@ def _extract_tier_from_docs(docs_json_path: Path, recipes: dict) -> dict:
         if not _is_progression_schematic(cn, tier):
             skipped += 1
             continue
+        is_mam = s.get('mType') == 'EST_MAM'
         for unlock in s.get('mUnlocks', []):
             for m in re.finditer(r'(\w+_C)\'', unlock.get('mRecipes', '')):
                 rid = m.group(1)
+                recipe_sources.setdefault(rid, []).append((tier, is_mam))
                 if rid not in recipe_tier or tier < recipe_tier[rid]:
                     recipe_tier[rid] = tier
 
@@ -376,7 +380,49 @@ def _extract_tier_from_docs(docs_json_path: Path, recipes: dict) -> dict:
                     found[iid] = t
         item_tier.update(found)
 
-    return item_tier
+    return item_tier, recipe_sources
+
+
+_RAW_ACQUISITIONS = {'miner', 'oil_extractor', 'water_extractor', 'resource_well'}  # backend/calculator.py 와 같음
+
+
+def _automatable_tiers(items: dict, recipes: dict, recipe_sources: dict) -> dict:
+    """아이템별 '자동화 가능한 가장 이른 티어'.
+    표준 production 레시피마다 max(레시피 해금 티어, 생산 건물 해금 티어, 재료 티어) → 그중 최소.
+    MAM 연구는 게임 데이터 티어가 고정값(외계 0, 나머지 3)이라 MAM 건물 해금 티어를 하한으로 둔다.
+    원자원·채집물(생산 레시피 없음)은 0. 대체 레시피는 보지 않음."""
+    building: dict[str, int] = {}  # Build_X_C ← 건설 레시피 산출물 Desc_X_C
+    for rid, r in recipes.items():
+        if r.get('recipeType') == 'construction' and rid in recipe_sources:
+            t = min(t for t, _ in recipe_sources[rid])
+            for p in r.get('products', []):
+                b = 'Build_' + p['item'].removeprefix('Desc_')
+                building[b] = min(t, building.get(b, t))
+    mam = building.get('Build_Mam_C', 0)
+
+    steps = []
+    for rid, r in recipes.items():
+        if r.get('recipeType') != 'production' or r.get('isAlternate') or rid not in recipe_sources:
+            continue
+        unlock = min(max(t, mam) if is_mam else t for t, is_mam in recipe_sources[rid])
+        producer = min((building.get(b, 0) for b in r.get('producedIn', [])), default=0)
+        steps.append((max(unlock, producer), r))
+
+    made = {p['item'] for r in recipes.values() if r.get('recipeType') == 'production'
+            for p in r.get('products', []) + r.get('byproducts', [])}
+    raw = {iid for iid, it in items.items() if it.get('acquisition') in _RAW_ACQUISITIONS}
+    inf = float('inf')
+    tier = {iid: 0 for iid in items if iid in raw or iid not in made}
+    changed = True
+    while changed:  # 재료 티어가 내려가면 그 재료를 쓰는 레시피도 다시 — 값이 줄기만 하므로 끝남
+        changed = False
+        for floor, r in steps:
+            t = max([floor] + [tier.get(i['item'], inf) for i in r.get('ingredients', [])])
+            for p in r.get('products', []) + r.get('byproducts', []):
+                if t < tier.get(p['item'], inf):
+                    tier[p['item']] = t
+                    changed = True
+    return {iid: t for iid, t in tier.items() if iid in items and iid in made and iid not in raw}
 
 
 def extract_icons(clean_dir: str | Path, source_dir: str | Path) -> dict:
@@ -422,30 +468,41 @@ def extract_icons(clean_dir: str | Path, source_dir: str | Path) -> dict:
     return {'needed': len(needed), 'copied': copied, 'missing': missing, 'sources': sources}
 
 
-def enrich_item_tiers(clean_dir: str | Path, docs_json_path: str | Path | None) -> int:
+def enrich_item_tiers(clean_dir: str | Path, docs_json_path: str | Path | None, fix: bool = False) -> dict:
     """
     clean/items.json에 techTier 필드 추가.
+    게임 데이터 티어가 없거나 자동화 가능한 티어보다 이른 아이템 = 어긋난 티어.
+    fix=True 면 어긋난 아이템을 자동화 가능한 티어로 보정.
     docs_json_path 없거나 FGSchematic 없으면 no-op.
-    Returns: 티어가 설정된 아이템 수
+    Returns: {'count': 티어가 설정된 아이템 수, 'mismatches': [{'item', 'from', 'to'}]}
     """
+    result = {'count': 0, 'mismatches': []}
     if not docs_json_path:
-        return 0
+        return result
     docs_json_path = Path(docs_json_path)
     if not docs_json_path.exists():
-        return 0
+        return result
 
     clean_dir = Path(clean_dir)
     items_path = clean_dir / "items.json"
     recipes_path = clean_dir / "recipes.json"
     if not items_path.exists() or not recipes_path.exists():
-        return 0
+        return result
 
     with open(items_path, 'r', encoding='utf-8') as f:
         items = json.load(f)
     with open(recipes_path, 'r', encoding='utf-8') as f:
         recipes = json.load(f)
 
-    tier_map = _extract_tier_from_docs(docs_json_path, recipes)
+    tier_map, recipe_sources = _extract_tier_from_docs(docs_json_path, recipes)
+    mismatches = sorted(
+        ({'item': iid, 'from': tier_map.get(iid), 'to': t}
+         for iid, t in _automatable_tiers(items, recipes, recipe_sources).items()
+         if tier_map.get(iid) is None or tier_map[iid] < t),
+        key=lambda m: (m['to'], m['item']),
+    )
+    if fix:
+        tier_map.update({m['item']: m['to'] for m in mismatches})
 
     count = 0
     for iid, item in items.items():
@@ -459,5 +516,6 @@ def enrich_item_tiers(clean_dir: str | Path, docs_json_path: str | Path | None) 
     with open(items_path, 'w', encoding='utf-8') as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
-    logger.info(f"Tier enrichment 완료: {count}/{len(items)}개 아이템에 techTier 설정")
-    return count
+    logger.info(f"Tier enrichment 완료: {count}/{len(items)}개 아이템에 techTier 설정, "
+                f"어긋난 티어 {len(mismatches)}개 {'보정함' if fix else '그대로 둠'}")
+    return {'count': count, 'mismatches': mismatches}

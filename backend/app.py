@@ -418,11 +418,12 @@ def _run_pipeline(args: list[str]) -> subprocess.CompletedProcess:
 
 
 def _setup_args() -> list[str]:
-    """초기 설정에서 고른 언어를 유지하는 파이프라인 인자."""
+    """초기 설정에서 고른 언어·티어 보정을 유지하는 파이프라인 인자."""
     setup = _load_json(SETUP_FILE)
     if not setup.get("languages"):
         return []
-    return ["--languages", ",".join(setup["languages"]), "--default-language", setup["defaultLanguage"]]
+    args = ["--languages", ",".join(setup["languages"]), "--default-language", setup["defaultLanguage"]]
+    return args + ["--fix-tiers"] if setup.get("tiers", {}).get("fixed") else args
 
 
 @app.post("/api/admin/pipeline/run")
@@ -504,17 +505,22 @@ def api_setup_status():
 @app.post("/api/setup/run")
 @_exclusive
 def api_setup_run():
-    """Body: {"languages": ["ko", "en-US"], "defaultLanguage": "ko"} → 선택 언어로 파이프라인 실행."""
+    """Body: {"languages": ["ko", "en-US"], "defaultLanguage": "ko", "fixTiers": true}
+    → 선택 언어로 파이프라인 실행. fixTiers(생략 시 false)면 어긋난 티어 보정."""
     body = request.get_json(force=True, silent=True) or {}
     languages = body.get("languages")
     default_language = body.get("defaultLanguage")
+    fix_tiers = body.get("fixTiers", False)
     available = _language_files()
     if not isinstance(languages, list) or not languages or any(code not in available for code in languages):
         return jsonify({"error": "languages는 game-data에 있는 언어 코드 목록이어야 함"}), 400
     if default_language not in languages:
         return jsonify({"error": "defaultLanguage는 languages 중 하나여야 함"}), 400
+    if not isinstance(fix_tiers, bool):
+        return jsonify({"error": "fixTiers는 true/false"}), 400
+    args = ["--languages", ",".join(languages), "--default-language", default_language]
     try:
-        result = _run_pipeline(["--languages", ",".join(languages), "--default-language", default_language])
+        result = _run_pipeline(args + ["--fix-tiers"] if fix_tiers else args)
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "error": "파이프라인 타임아웃 (600초 초과)"}), 500
     if result.returncode != 0:

@@ -209,8 +209,8 @@ class PipelineRunner:
 
         logger.info(f"Merge complete: {stats['items_patches']} item patches, {stats['recipes_patches']} recipe patches, {stats['buildings_patches']} building patches")
 
-        tier_count = merge.enrich_item_tiers(str(clean_dir), str(self.paths["docs_json"]))
-        logger.info(f"Tech tier enrichment: {tier_count} items tagged")
+        tiers = merge.enrich_item_tiers(str(clean_dir), str(self.paths["docs_json"]), fix=self.args.fix_tiers)
+        logger.info(f"Tech tier enrichment: {tiers['count']} items tagged")
 
         self.run_names(clean_dir)
 
@@ -218,17 +218,19 @@ class PipelineRunner:
         if icon_stats["missing"]:
             logger.warning(f"아이콘 {len(icon_stats['missing'])}개 없음 (FModel 출력물 확인): {icon_stats['missing'][:5]}")
 
-        self.write_setup(clean_dir, icon_stats)
+        self.write_setup(clean_dir, icon_stats, tiers["mismatches"])
         return {"stats": stats, "clean_dir": str(clean_dir)}
 
-    def write_setup(self, clean_dir: Path, icon_stats: dict) -> None:
-        """clean/setup.json — 설정 완료 표시 + 선택 언어 + 아이콘 결과 + 실제 사용한 원본 파일(정리 기능용)."""
+    def write_setup(self, clean_dir: Path, icon_stats: dict, tier_mismatches: list) -> None:
+        """clean/setup.json — 설정 완료 표시 + 선택 언어 + 아이콘 결과 + 티어 보정 여부·어긋난 티어
+        + 실제 사용한 원본 파일(정리 기능용)."""
         game_data = Path(self.paths["game_data"])
         used = list(self.paths["languages"].values()) + icon_stats["sources"]  # 둘 다 game_data 기준 경로
         setup = {
             "languages": sorted(self.paths["languages"]),
             "defaultLanguage": self.paths["default_language"],
             "icons": {k: icon_stats[k] for k in ("needed", "copied", "missing")},
+            "tiers": {"fixed": self.args.fix_tiers, "mismatches": tier_mismatches},
             "usedSources": sorted(Path(p).relative_to(game_data).as_posix() for p in used),
             "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
@@ -382,6 +384,11 @@ Examples:
         type=str,
         default=None,
         help="기본 언어 코드 (default: ko, 없으면 첫 언어)",
+    )
+    parser.add_argument(
+        "--fix-tiers",
+        action="store_true",
+        help="게임 데이터 티어가 재료·생산 건물 해금보다 이른 아이템을 자동화 가능한 티어로 보정",
     )
     parser.add_argument(
         "--raw-output",

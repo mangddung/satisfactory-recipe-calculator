@@ -20,6 +20,7 @@ import { LoadingOutlined, SettingOutlined } from '@ant-design/icons'
 import koKR from 'antd/locale/ko_KR'
 import enUS from 'antd/locale/en_US'
 import type { ApiError } from '../../api'
+import { useCraftableItems } from '../../api/calculator'
 import {
   useCleanup,
   useCleanupPreview,
@@ -30,6 +31,7 @@ import {
   type SetupResult,
   type SetupRunError,
 } from '../../api/setup'
+import ItemIcon from '../../components/ItemIcon'
 import { BROWSER_UI_LANG, makeT, matchBrowserLanguages, nativeName } from '../../i18n'
 
 // setup page text follows the browser language only (not the app language / sc_lang cookie)
@@ -70,6 +72,78 @@ const scrollBox: CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: 6,
   padding: '4px 12px',
+}
+
+const tierLabel = (tier: number | null) => (tier === null ? t('setup.tiers.none') : `T${tier}`)
+
+// onChoose(fix): parent re-runs the pipeline only when fix differs from the applied `fixed`
+function TierStep({
+  tiers,
+  running,
+  alerts,
+  onBack,
+  onChoose,
+}: {
+  tiers: SetupResult['tiers']
+  running: boolean
+  alerts: ReactNode
+  onBack: () => void
+  onChoose: (fix: boolean) => void
+}) {
+  const craftable = useCraftableItems() // localized names + icons
+  const byId = new Map((craftable.data ?? []).map((c) => [c.id, c]))
+  const fixed = tiers?.fixed ?? false
+  const mismatches = tiers?.mismatches ?? []
+
+  if (!mismatches.length) {
+    return (
+      <>
+        <Alert type="success" showIcon title={t('setup.tiers.nothing')} />
+        {alerts}
+        <div style={footer}>
+          <Button disabled={running} onClick={onBack}>{t('setup.back')}</Button>
+          <Button type="primary" disabled={running} onClick={() => onChoose(fixed)}>{t('setup.next')}</Button>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <p style={intro}>{t('setup.tiers.intro', { count: mismatches.length })}</p>
+      <div style={scrollBox}>
+        {mismatches.map((m) => {
+          const item = byId.get(m.item)
+          return (
+            <div
+              key={m.item}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}
+            >
+              <ItemIcon iconPath={item?.iconPath ?? null} size={24} />
+              <span
+                style={{ flex: 1, minWidth: 0, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {item?.displayName ?? m.item}
+              </span>
+              <Tag style={{ marginInlineEnd: 0 }}>{tierLabel(m.from)}</Tag>
+              <span style={muted}>→</span>
+              <Tag color="gold" style={{ marginInlineEnd: 0 }}>{tierLabel(m.to)}</Tag>
+            </div>
+          )
+        })}
+      </div>
+      <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>{t('setup.tiers.basis')}</p>
+      {fixed && <p style={{ ...muted, marginTop: 4, marginBottom: 0 }}>{t('setup.tiers.applied')}</p>}
+      {alerts}
+      <div style={footer}>
+        <Button disabled={running} onClick={onBack}>{t('setup.back')}</Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button disabled={running} onClick={() => onChoose(false)}>{t('setup.tiers.keep')}</Button>
+          <Button type="primary" disabled={running} onClick={() => onChoose(true)}>{t('setup.tiers.fix')}</Button>
+        </div>
+      </div>
+    </>
+  )
 }
 
 // onDone(null) = skipped / nothing to clean
@@ -231,14 +305,16 @@ export default function SetupPage() {
       .find((c) => c && checked.includes(c)) ?? checked[0]
   const running = runSetup.isPending
   const runError = (runSetup.error as ApiError | null)?.body as SetupRunError | null | undefined
+  // tier correction applied by the last run in this wizard, else by the previous setup
+  const fixTiers = result?.tiers?.fixed ?? previous?.tiers?.fixed ?? false
 
-  function run() {
+  function run(fix: boolean, next: number) {
     runSetup.mutate(
-      { languages: checked, defaultLanguage },
+      { languages: checked, defaultLanguage, fixTiers: fix },
       {
         onSuccess: (setup) => {
           setResult(setup)
-          setStep(2)
+          setStep(next)
         },
       },
     )
@@ -405,13 +481,23 @@ export default function SetupPage() {
         {runAlerts}
         <div style={footer}>
           <Button disabled={running} onClick={() => setStep(0)}>{t('setup.back')}</Button>
-          <Button type="primary" loading={running} disabled={!checked.length} onClick={run}>
+          <Button type="primary" loading={running} disabled={!checked.length} onClick={() => run(fixTiers, 2)}>
             {t('setup.lang.run')}
           </Button>
         </div>
       </>
     )
   } else if (step === 2 && result) {
+    content = (
+      <TierStep
+        tiers={result.tiers}
+        running={running}
+        alerts={runAlerts}
+        onBack={() => setStep(1)}
+        onChoose={(fix) => (fix === fixTiers ? setStep(3) : run(fix, 3))}
+      />
+    )
+  } else if (step === 3 && result) {
     const { needed, copied, missing } = result.icons
     // users export whole folders in FModel -> unique parent folders of the missing textures
     const folders = [...new Set(missing.map((p) => fmodelPath(p).replace(/\/[^/]*$/, '')))]
@@ -485,29 +571,29 @@ export default function SetupPage() {
         {runAlerts}
         {missing.length > 0 && <p style={{ ...muted, margin: '16px 0 0' }}>{t('setup.icons.cleanupNote')}</p>}
         <div style={footer}>
-          <Button disabled={running} onClick={() => setStep(1)}>{t('setup.back')}</Button>
+          <Button disabled={running} onClick={() => setStep(2)}>{t('setup.back')}</Button>
           <div style={{ display: 'flex', gap: 8 }}>
             {missing.length > 0 && (
               <>
-                <Button disabled={running} onClick={() => setStep(4)}>{t('setup.icons.finishWithoutCleanup')}</Button>
-                <Button type="primary" loading={running} onClick={run}>{t('setup.recheck')}</Button>
+                <Button disabled={running} onClick={() => setStep(5)}>{t('setup.icons.finishWithoutCleanup')}</Button>
+                <Button type="primary" loading={running} onClick={() => run(fixTiers, 3)}>{t('setup.recheck')}</Button>
               </>
             )}
             {/* cleanup only after every icon is found */}
-            <Button type="primary" disabled={running || missing.length > 0} onClick={() => setStep(3)}>
+            <Button type="primary" disabled={running || missing.length > 0} onClick={() => setStep(4)}>
               {t('setup.next')}
             </Button>
           </div>
         </div>
       </>
     )
-  } else if (step === 3) {
+  } else if (step === 4) {
     content = (
       <CleanupStep
-        onBack={() => setStep(2)}
+        onBack={() => setStep(3)}
         onDone={(r) => {
           setDeleted(r)
-          setStep(4)
+          setStep(5)
         }}
       />
     )
@@ -529,6 +615,15 @@ export default function SetupPage() {
           items={[
             { key: 'languages', label: t('setup.done.languages'), children: result.languages.map(nativeName).join(', ') },
             { key: 'default', label: t('setup.lang.default'), children: nativeName(result.defaultLanguage) },
+            {
+              key: 'tiers',
+              label: t('setup.done.tiers'),
+              children: result.tiers?.mismatches.length
+                ? t(result.tiers.fixed ? 'setup.done.tiersFixed' : 'setup.done.tiersKept', {
+                    count: result.tiers.mismatches.length,
+                  })
+                : t('setup.tiers.nothing'),
+            },
             { key: 'icons', label: t('setup.done.icons'), children: `${result.icons.copied} / ${result.icons.needed}` },
             {
               key: 'cleanup',
@@ -569,6 +664,7 @@ export default function SetupPage() {
             items={[
               { title: t('setup.step.source') },
               { title: t('setup.step.languages') },
+              { title: t('setup.step.tiers') },
               { title: t('setup.step.icons') },
               { title: t('setup.step.cleanup') },
               { title: t('setup.step.done') },
