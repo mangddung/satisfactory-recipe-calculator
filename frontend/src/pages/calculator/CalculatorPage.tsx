@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, Fragment } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from 'react'
 import {
   Button,
   InputNumber,
@@ -234,7 +234,12 @@ export default function CalculatorPage() {
     })
   }
 
+  const skipRateRecalc = useRef(false)
   useEffect(() => {
+    if (skipRateRecalc.current) {
+      skipRateRecalc.current = false
+      return
+    }
     if (!selectedItemId) return
     const timer = setTimeout(() => {
       runCalculate({ itemId: selectedItemId, targetRate, recipeSelections })
@@ -260,7 +265,14 @@ export default function CalculatorPage() {
   function handleSavePlan() {
     if (!selectedItemId || !planName.trim()) return
     savePlanMutation.mutate(
-      { name: planName.trim(), itemId: selectedItemId, targetRate, recipeSelections },
+      {
+        name: planName.trim(),
+        itemId: selectedItemId,
+        targetRate,
+        recipeSelections,
+        rawNodeSettings,
+        collapsedPaths: [...collapsedPaths],
+      },
       {
         onSuccess: () => {
           message.success(t('calc.planSaved'))
@@ -273,14 +285,24 @@ export default function CalculatorPage() {
   }
 
   function handleLoadPlan(plan: Plan) {
+    // 여기서 바로 계산하므로 targetRate 변경 디바운스 재계산은 건너뜀 (돌면 원자재 설정이 기본값으로 덮임)
+    if (plan.targetRate !== targetRate) skipRateRecalc.current = true
     setSelectedItemId(plan.itemId)
     setTargetRate(plan.targetRate)
     setRecipeSelections(plan.recipeSelections ?? {})
     setCollapsedPaths(new Set())
     setPlansModalOpen(false)
-    runCalculate(
+    calculateMutation.mutate(
       { itemId: plan.itemId, targetRate: plan.targetRate, recipeSelections: plan.recipeSelections ?? {} },
-      true,
+      {
+        onSuccess: (data) => {
+          setResult(data)
+          // 저장 후 게임 데이터가 바뀌어 새로 생긴 원자재 노드는 기본값
+          setRawNodeSettings({ ...rawDefaultsFor(data), ...plan.rawNodeSettings })
+          setCollapsedPaths(plan.collapsedPaths ? new Set(plan.collapsedPaths) : initialCollapsedPaths(data.root))
+        },
+        onError: () => message.error(t('calc.calculateFailed')),
+      },
     )
   }
 
@@ -620,7 +642,16 @@ export default function CalculatorPage() {
             pagination={false}
             columns={[
               { dataIndex: 'name', title: t('common.name') },
-              { dataIndex: 'itemId', title: t('calc.item'), render: (id) => itemMap[id]?.displayName ?? id },
+              {
+                dataIndex: 'itemId',
+                title: t('calc.item'),
+                render: (id) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ItemIcon iconPath={itemMap[id]?.iconPath ?? null} size={24} />
+                    <span>{itemMap[id]?.displayName ?? id}</span>
+                  </div>
+                ),
+              },
               { dataIndex: 'targetRate', title: '/min', width: 70, align: 'right' },
               {
                 key: 'actions',

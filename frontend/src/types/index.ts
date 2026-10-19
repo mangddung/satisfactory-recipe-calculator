@@ -139,5 +139,8 @@ export interface Plan {
   itemId: string
   targetRate: number
   recipeSelections: Record<string, string>
+  // 예전 플랜엔 없음
+  rawNodeSettings?: Record<string, RawNodeSettings>
+  collapsedPaths?: string[]
   createdAt: string
 }

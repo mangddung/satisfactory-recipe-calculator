@@ -723,16 +723,22 @@ def api_plans_list():
 @app.post("/api/plans")
 def api_plans_create():
     """
-    Body: {"name": "...", "itemId": "...", "targetRate": 100, "recipeSelections": {...}}
+    Body: {"name": "...", "itemId": "...", "targetRate": 100, "recipeSelections": {...},
+           "rawNodeSettings": {...}, "collapsedPaths": [...]}
     """
     body = request.get_json(force=True, silent=True) or {}
     name = body.get("name", "").strip()
     item_id = body.get("itemId", "").strip()
     target_rate = body.get("targetRate")
     recipe_selections = body.get("recipeSelections", {})
+    raw_node_settings = body.get("rawNodeSettings", {})
+    collapsed_paths = body.get("collapsedPaths", [])
 
     if not name or not item_id or target_rate is None:
         return jsonify({"error": "name, itemId, targetRate 필수"}), 400
+    if not isinstance(raw_node_settings, dict) or not isinstance(collapsed_paths, list) \
+            or not all(isinstance(p, str) for p in collapsed_paths):
+        return jsonify({"error": "rawNodeSettings는 객체, collapsedPaths는 문자열 배열"}), 400
 
     plan = {
         "id": str(uuid.uuid4()),
@@ -740,6 +746,8 @@ def api_plans_create():
         "itemId": item_id,
         "targetRate": float(target_rate),
         "recipeSelections": recipe_selections,
+        "rawNodeSettings": raw_node_settings,
+        "collapsedPaths": collapsed_paths,
         "createdAt": datetime.utcnow().isoformat() + "Z",
     }
     PLANS_DIR.mkdir(parents=True, exist_ok=True)
