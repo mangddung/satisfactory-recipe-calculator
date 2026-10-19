@@ -67,7 +67,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 | Initial setup (`/setup`) | Available | Not available — uses the dev output |
 | Admin pages (`/admin`) | Available | Left out of the build, `/api/admin/*` returns 404 |
 | Data | Generated from `game-data/` into `backend/data/clean/` | `backend/data/clean/` copied at build time |
-| Ports | 38173 (app), 38050 (backend) | 80 (app), 5000 (backend) |
+| Ports | 38173 (app), 38050 (backend) — this PC only (127.0.0.1) | 80 (app) — backend is reached only through nginx |
 
 The admin pages are for checking and correcting data: browse items, recipes, buildings, and extractors, validate data, re-run the pipeline, and classify unclassified items by hand ([docs/DATA_SOURCE.md](docs/DATA_SOURCE.md), Korean).
 The backend serves the admin API only when the environment variable `ENABLE_ADMIN=1` is set, which only `docker-compose.yml` (dev) does.
@@ -84,6 +84,8 @@ python data-pipeline/test_merge.py
 ### License
 
 [MIT](LICENSE) — covers the code only; game data and icons belong to Coffee Stain Studios.
+
+Satisfactory is a trademark of Coffee Stain Studios. This is an unofficial fan project, not affiliated with or endorsed by Coffee Stain Studios.
 
 ---
 
@@ -150,7 +152,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 | 초기 설정 (`/setup`) | 가능 | 불가 — dev 결과물 사용 |
 | 관리자 화면 (`/admin`) | 사용 가능 | 빌드에서 제외, `/api/admin/*` 는 404 |
 | 데이터 | `game-data/` → `backend/data/clean/` 생성 | 빌드 시 `backend/data/clean/` 복사 |
-| 포트 | 38173 (앱), 38050 (백엔드) | 80 (앱), 5000 (백엔드) |
+| 포트 | 38173 (앱), 38050 (백엔드) — 이 PC에서만 접속 (127.0.0.1) | 80 (앱) — 백엔드는 nginx 통해서만 접근 |
 
 관리자 화면은 데이터 확인·보정용입니다: 아이템·레시피·건물·추출기 조회, 데이터 검증, 파이프라인 재실행, 미분류 아이템 수동 분류([docs/DATA_SOURCE.md](docs/DATA_SOURCE.md)).
 백엔드는 환경변수 `ENABLE_ADMIN=1` 일 때만 관리자 API를 열며, `docker-compose.yml`(dev)에만 설정되어 있습니다.
@@ -167,3 +169,5 @@ python data-pipeline/test_merge.py
 ### 라이선스
 
 [MIT](LICENSE) — 코드에만 적용되며, 게임 데이터와 아이콘의 권리는 Coffee Stain Studios에 있습니다.
+
+Satisfactory는 Coffee Stain Studios의 상표입니다. 이 프로젝트는 비공식 팬 프로젝트이며 Coffee Stain Studios와 제휴하거나 승인받지 않았습니다.
