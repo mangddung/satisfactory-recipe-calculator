@@ -81,6 +81,10 @@ python backend/test_calculator.py
 python data-pipeline/test_merge.py
 ```
 
+### License
+
+[MIT](LICENSE) — covers the code only; game data and icons belong to Coffee Stain Studios.
+
 ---
 
 ## 한국어
@@ -159,3 +163,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 python backend/test_calculator.py
 python data-pipeline/test_merge.py
 ```
+
+### 라이선스
+
+[MIT](LICENSE) — 코드에만 적용되며, 게임 데이터와 아이콘의 권리는 Coffee Stain Studios에 있습니다.
