@@ -28,19 +28,6 @@ export interface SetupStatus {
   setup: SetupResult | null
 }
 
-export interface CleanupPreview {
-  languages: { files: LanguageFile[]; bytes: number }
-  pngs: { count: number; bytes: number }
-  other: { count: number; bytes: number; samples: string[] }
-  totalCount: number
-  totalBytes: number
-}
-
-export interface CleanupResult {
-  deletedCount: number
-  deletedBytes: number
-}
-
 // error body of POST /api/setup/run (ApiError.body)
 export interface SetupRunError {
   error?: string
@@ -64,26 +51,5 @@ export function useRunSetup() {
         body: JSON.stringify(body),
       }).then((r) => r.setup),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['setup'] }),
-  })
-}
-
-export function useCleanupPreview() {
-  return useQuery({
-    queryKey: ['setup', 'cleanup'],
-    queryFn: () => apiFetch<CleanupPreview>('/api/setup/cleanup'),
-    gcTime: 0, // drop the cache when the step closes -> fresh scan (no stale list) each time it opens
-  })
-}
-
-export function useCleanup() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: () =>
-      apiFetch<CleanupResult>('/api/setup/cleanup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirm: true }),
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['setup', 'status'] }),
   })
 }

@@ -6,7 +6,6 @@ import {
   Collapse,
   ConfigProvider,
   Descriptions,
-  Modal,
   Progress,
   Result,
   Select,
@@ -14,23 +13,13 @@ import {
   Steps,
   Tag,
   Typography,
-  message,
 } from 'antd'
 import { LoadingOutlined, SettingOutlined } from '@ant-design/icons'
 import koKR from 'antd/locale/ko_KR'
 import enUS from 'antd/locale/en_US'
 import type { ApiError } from '../../api'
 import { useCraftableItems } from '../../api/calculator'
-import {
-  useCleanup,
-  useCleanupPreview,
-  useRunSetup,
-  useSetupStatus,
-  type CleanupPreview,
-  type CleanupResult,
-  type SetupResult,
-  type SetupRunError,
-} from '../../api/setup'
+import { useRunSetup, useSetupStatus, type SetupResult, type SetupRunError } from '../../api/setup'
 import ItemIcon from '../../components/ItemIcon'
 import { BROWSER_UI_LANG, makeT, matchBrowserLanguages, nativeName } from '../../i18n'
 
@@ -146,146 +135,6 @@ function TierStep({
   )
 }
 
-// onDone(null) = skipped / nothing to clean
-function CleanupStep({ onBack, onDone }: { onBack: () => void; onDone: (deleted: CleanupResult | null) => void }) {
-  const preview = useCleanupPreview()
-  const cleanup = useCleanup()
-  const [modal, modalHolder] = Modal.useModal()
-  const data = preview.data
-
-  const countSize = (count: number, bytes: number) =>
-    t('setup.cleanup.countSize', { count, size: formatBytes(bytes) })
-
-  function confirmDelete(p: CleanupPreview) {
-    modal.confirm({
-      title: t('setup.cleanup.confirmTitle'),
-      content: t('setup.cleanup.confirmContent', { count: p.totalCount, size: formatBytes(p.totalBytes) }),
-      okText: t('setup.cleanup.confirmOk'),
-      cancelText: t('common.cancel'),
-      okButtonProps: { danger: true },
-      autoFocusButton: 'cancel', // Enter must not delete
-      onOk: () =>
-        cleanup.mutateAsync().then(
-          (r) => {
-            message.success(t('setup.cleanup.deleted', { count: r.deletedCount, size: formatBytes(r.deletedBytes) }))
-            onDone(r)
-          },
-          () => message.error(t('setup.cleanup.deleteFailed')),
-        ),
-    })
-  }
-
-  if (!data) {
-    if (!preview.isError) {
-      return (
-        <div style={{ textAlign: 'center', padding: 40 }}>
-          <Spin />
-          <div style={{ ...muted, marginTop: 12 }}>{t('setup.cleanup.scanning')}</div>
-        </div>
-      )
-    }
-    return (
-      <>
-        <Alert
-          type="error"
-          showIcon
-          title={t('setup.cleanup.loadFailed')}
-          action={<Button size="small" onClick={() => preview.refetch()}>{t('setup.recheck')}</Button>}
-        />
-        <div style={footer}>
-          <Button onClick={onBack}>{t('setup.back')}</Button>
-          <Button onClick={() => onDone(null)}>{t('setup.cleanup.skip')}</Button>
-        </div>
-      </>
-    )
-  }
-
-  if (!data.totalCount) {
-    return (
-      <>
-        <Alert type="success" showIcon title={t('setup.cleanup.nothing')} />
-        <div style={footer}>
-          <Button onClick={onBack}>{t('setup.back')}</Button>
-          <Button type="primary" onClick={() => onDone(null)}>{t('setup.next')}</Button>
-        </div>
-      </>
-    )
-  }
-
-  const samples = data.other.samples.slice(0, 5)
-  return (
-    <>
-      {modalHolder}
-      <p style={intro}>{t('setup.cleanup.intro')}</p>
-      <Descriptions
-        column={1}
-        bordered
-        size="small"
-        items={[
-          {
-            key: 'languages',
-            label: t('setup.cleanup.languages'),
-            children: (
-              <>
-                {countSize(data.languages.files.length, data.languages.bytes)}
-                {data.languages.files.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
-                    {data.languages.files.map((f) => (
-                      <Tag key={f.code} style={{ marginInlineEnd: 0 }}>{f.code}</Tag>
-                    ))}
-                  </div>
-                )}
-              </>
-            ),
-          },
-          { key: 'pngs', label: t('setup.cleanup.pngs'), children: countSize(data.pngs.count, data.pngs.bytes) },
-          {
-            key: 'other',
-            label: t('setup.cleanup.other'),
-            children: (
-              <>
-                {countSize(data.other.count, data.other.bytes)}
-                {samples.map((s) => (
-                  <div key={s} style={{ ...muted, wordBreak: 'break-all' }}>{s}</div>
-                ))}
-                {data.other.count > samples.length && (
-                  <div style={muted}>… {t('setup.cleanup.more', { count: data.other.count - samples.length })}</div>
-                )}
-              </>
-            ),
-          },
-          {
-            key: 'total',
-            label: t('setup.cleanup.total'),
-            children: <b>{countSize(data.totalCount, data.totalBytes)}</b>,
-          },
-        ]}
-      />
-      <Alert
-        type="warning"
-        showIcon
-        style={{ marginTop: 16 }}
-        title={t('setup.cleanup.warnTitle')}
-        description={
-          <ul style={list}>
-            <li>{t('setup.cleanup.warnBackup')}</li>
-            <li>{t('setup.cleanup.warnReadd')}</li>
-          </ul>
-        }
-      />
-      <div style={footer}>
-        <Button onClick={onBack}>{t('setup.back')}</Button>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button onClick={() => onDone(null)}>{t('setup.cleanup.skip')}</Button>
-          <Button type="primary" danger onClick={() => confirmDelete(data)}>
-            {t('setup.cleanup.delete')}
-          </Button>
-        </div>
-      </div>
-    </>
-  )
-}
-
 export default function SetupPage() {
   const [step, setStep] = useState(0)
   const status = useSetupStatus()
@@ -293,7 +142,6 @@ export default function SetupPage() {
   const [checkedState, setChecked] = useState<string[] | null>(null) // null = not touched -> initial selection
   const [defaultState, setDefault] = useState<string | null>(null)
   const [result, setResult] = useState<SetupResult | null>(null)
-  const [deleted, setDeleted] = useState<CleanupResult | null>(null) // null = cleanup not performed
 
   const files = status.data?.gameData.languageFiles ?? []
   const codes = files.map((f) => f.code)
@@ -477,7 +325,6 @@ export default function SetupPage() {
             options={checked.map((c) => ({ value: c, label: `${nativeName(c)} (${c})` }))}
           />
         </div>
-        <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>{t('setup.lang.cleanupNote')}</p>
         {runAlerts}
         <div style={footer}>
           <Button disabled={running} onClick={() => setStep(0)}>{t('setup.back')}</Button>
@@ -569,33 +416,18 @@ export default function SetupPage() {
           />
         )}
         {runAlerts}
-        {missing.length > 0 && <p style={{ ...muted, margin: '16px 0 0' }}>{t('setup.icons.cleanupNote')}</p>}
         <div style={footer}>
           <Button disabled={running} onClick={() => setStep(2)}>{t('setup.back')}</Button>
           <div style={{ display: 'flex', gap: 8 }}>
             {missing.length > 0 && (
-              <>
-                <Button disabled={running} onClick={() => setStep(5)}>{t('setup.icons.finishWithoutCleanup')}</Button>
-                <Button type="primary" loading={running} onClick={() => run(fixTiers, 3)}>{t('setup.recheck')}</Button>
-              </>
+              <Button loading={running} onClick={() => run(fixTiers, 3)}>{t('setup.recheck')}</Button>
             )}
-            {/* cleanup only after every icon is found */}
-            <Button type="primary" disabled={running || missing.length > 0} onClick={() => setStep(4)}>
+            <Button type="primary" disabled={running} onClick={() => setStep(4)}>
               {t('setup.next')}
             </Button>
           </div>
         </div>
       </>
-    )
-  } else if (step === 4) {
-    content = (
-      <CleanupStep
-        onBack={() => setStep(3)}
-        onDone={(r) => {
-          setDeleted(r)
-          setStep(5)
-        }}
-      />
     )
   } else if (result) {
     content = (
@@ -625,22 +457,24 @@ export default function SetupPage() {
                 : t('setup.tiers.nothing'),
             },
             { key: 'icons', label: t('setup.done.icons'), children: `${result.icons.copied} / ${result.icons.needed}` },
-            {
-              key: 'cleanup',
-              label: t('setup.done.cleanup'),
-              children: deleted
-                ? t('setup.cleanup.deleted', { count: deleted.deletedCount, size: formatBytes(deleted.deletedBytes) })
-                : t('setup.done.cleanupSkipped'),
-            },
           ]}
         />
-        {result.icons.missing.length > 0 && (
+        {result.icons.missing.length > 0 ? (
           <Alert
             type="warning"
             showIcon
             style={{ marginTop: 16 }}
             title={t('setup.done.missingTitle', { count: result.icons.missing.length })}
             description={t('setup.done.missingHow')}
+          />
+        ) : (
+          // icons still missing -> the re-run above needs game-data, so the hint only shows once nothing is missing
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginTop: 16 }}
+            title={t('setup.done.gameDataTitle')}
+            description={t('setup.done.gameDataHow')}
           />
         )}
       </Result>
@@ -666,7 +500,6 @@ export default function SetupPage() {
               { title: t('setup.step.languages') },
               { title: t('setup.step.tiers') },
               { title: t('setup.step.icons') },
-              { title: t('setup.step.cleanup') },
               { title: t('setup.step.done') },
             ]}
           />

@@ -21,8 +21,6 @@ Flask 서버
 초기 설정 API:
   GET  /api/setup/status
   POST /api/setup/run
-  GET  /api/setup/cleanup
-  POST /api/setup/cleanup
 
 모든 API는 ?lang=<언어코드> 로 이름(displayName/description) 언어 선택.
 """
@@ -403,11 +401,11 @@ _busy = threading.Lock()
 
 
 def _exclusive(view):
-    """파이프라인 실행·game-data 정리는 한 번에 하나만 (같은 폴더에 쓰고 지움). 실행 중이면 409."""
+    """파이프라인 실행은 한 번에 하나만 (같은 폴더에 씀). 실행 중이면 409."""
     @functools.wraps(view)
     def wrapper(*args, **kwargs):
         if not _busy.acquire(blocking=False):
-            return jsonify({"ok": False, "error": "파이프라인 또는 정리가 이미 실행 중"}), 409
+            return jsonify({"ok": False, "error": "파이프라인이 이미 실행 중"}), 409
         try:
             return view(*args, **kwargs)
         finally:
@@ -454,19 +452,12 @@ def api_pipeline_run():
         return jsonify({"error": "pipeline failed"}), 500
 
 
-# ── 초기 설정 (game-data → 언어 선택 → 아이콘 확인 → 정리) ────────────────
+# ── 초기 설정 (game-data → 언어 선택 → 티어 보정 → 아이콘 확인) ────────────
 
 def _language_files() -> dict[str, Path]:
     if not GAME_DATA.exists():
         return {}
     return _import_pipeline_module("run_pipeline").find_language_files(GAME_DATA)
-
-
-def _public_setup() -> dict | None:
-    setup = _load_json(SETUP_FILE)
-    if not setup:
-        return None
-    return {k: v for k, v in setup.items() if k != "usedSources"}
 
 
 def _walk_files(directory: Path):
@@ -478,19 +469,6 @@ def _walk_files(directory: Path):
                 yield from _walk_files(Path(entry.path))
             elif entry.is_file(follow_symlinks=False):
                 yield entry
-
-
-def _unused_game_files() -> list[tuple[Path, int]]:
-    """game-data 안에서 마지막 파이프라인이 쓰지 않은 파일과 크기 (README 제외).
-    서버가 직접 계산 — 클라이언트 입력 없음."""
-    used = set(_load_json(SETUP_FILE).get("usedSources", []))
-    files = []
-    for entry in _walk_files(GAME_DATA):
-        path = Path(entry.path)
-        rel = path.relative_to(GAME_DATA).as_posix()
-        if rel != "README.md" and rel not in used:
-            files.append((path, entry.stat(follow_symlinks=False).st_size))
-    return files
 
 
 @app.get("/api/setup/status")
@@ -507,7 +485,7 @@ def api_setup_status():
             ],
             "iconSourceFound": icon_source_found,
         },
-        "setup": _public_setup(),
+        "setup": _load_json(SETUP_FILE) or None,
     })
 
 
@@ -535,53 +513,7 @@ def api_setup_run():
     if result.returncode != 0:
         logger.error(f"초기 설정 파이프라인 실패:\n{result.stderr[-3000:]}")
         return jsonify({"ok": False, "error": "파이프라인 실패", "log": result.stderr[-1000:]}), 500
-    return jsonify({"ok": True, "setup": _public_setup()})
-
-
-@app.get("/api/setup/cleanup")
-def api_setup_cleanup_preview():
-    """정리하면 삭제될 game-data 파일 요약."""
-    if not SETUP_FILE.exists():
-        return jsonify({"error": "초기 설정(파이프라인) 먼저 실행 필요"}), 409
-    unused = dict(_unused_game_files())
-    lang_files = [
-        {"code": code, "path": p.relative_to(GAME_DATA).as_posix(), "bytes": unused[p]}
-        for code, p in sorted(_language_files().items()) if p in unused
-    ]
-    lang_paths = {GAME_DATA / f["path"] for f in lang_files}
-    pngs = [p for p in unused if p.suffix.lower() == ".png"]
-    other = sorted(p for p in unused if p.suffix.lower() != ".png" and p not in lang_paths)
-    return jsonify({
-        "languages": {"files": lang_files, "bytes": sum(f["bytes"] for f in lang_files)},
-        "pngs": {"count": len(pngs), "bytes": sum(unused[p] for p in pngs)},
-        "other": {
-            "count": len(other),
-            "bytes": sum(unused[p] for p in other),
-            "samples": [p.relative_to(GAME_DATA).as_posix() for p in other[:20]],
-        },
-        "totalCount": len(unused),
-        "totalBytes": sum(unused.values()),
-    })
-
-
-@app.post("/api/setup/cleanup")
-@_exclusive
-def api_setup_cleanup():
-    """Body: {"confirm": true} → 사용하지 않는 game-data 파일 삭제 후 빈 폴더 정리. 되돌릴 수 없음."""
-    body = request.get_json(force=True, silent=True) or {}
-    if body.get("confirm") is not True:
-        return jsonify({"error": "confirm: true 필요"}), 400
-    if not SETUP_FILE.exists():
-        return jsonify({"error": "초기 설정(파이프라인) 먼저 실행 필요"}), 409
-    files = _unused_game_files()
-    for path, _ in files:
-        path.unlink()
-    for dirpath, _, _ in sorted(os.walk(GAME_DATA), key=lambda w: len(Path(w[0]).parts), reverse=True):
-        if Path(dirpath) != GAME_DATA and not os.listdir(dirpath):
-            os.rmdir(dirpath)
-    deleted_bytes = sum(size for _, size in files)
-    logger.info(f"game-data 정리: {len(files)}개 파일 삭제 ({deleted_bytes} bytes)")
-    return jsonify({"deletedCount": len(files), "deletedBytes": deleted_bytes})
+    return jsonify({"ok": True, "setup": _load_json(SETUP_FILE) or None})
 
 
 # ── 공개 게임 데이터 API (계산기 클라이언트용) ─────────────────────────

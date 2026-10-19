@@ -222,16 +222,12 @@ class PipelineRunner:
         return {"stats": stats, "clean_dir": str(clean_dir)}
 
     def write_setup(self, clean_dir: Path, icon_stats: dict, tier_mismatches: list) -> None:
-        """clean/setup.json — 설정 완료 표시 + 선택 언어 + 아이콘 결과 + 티어 보정 여부·어긋난 티어
-        + 실제 사용한 원본 파일(정리 기능용)."""
-        game_data = Path(self.paths["game_data"])
-        used = list(self.paths["languages"].values()) + icon_stats["sources"]  # 둘 다 game_data 기준 경로
+        """clean/setup.json — 설정 완료 표시 + 선택 언어 + 아이콘 결과 + 티어 보정 여부·어긋난 티어."""
         setup = {
             "languages": sorted(self.paths["languages"]),
             "defaultLanguage": self.paths["default_language"],
             "icons": {k: icon_stats[k] for k in ("needed", "copied", "missing")},
             "tiers": {"fixed": self.args.fix_tiers, "mismatches": tier_mismatches},
-            "usedSources": sorted(Path(p).relative_to(game_data).as_posix() for p in used),
             "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
         with open(clean_dir / "setup.json", "w", encoding="utf-8") as f:
