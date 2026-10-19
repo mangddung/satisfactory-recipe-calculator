@@ -21,10 +21,7 @@ import type { ApiError } from '../../api'
 import { useCraftableItems } from '../../api/calculator'
 import { useRunSetup, useSetupStatus, type SetupResult, type SetupRunError } from '../../api/setup'
 import ItemIcon from '../../components/ItemIcon'
-import { BROWSER_UI_LANG, makeT, matchBrowserLanguages, nativeName } from '../../i18n'
-
-// setup page text follows the browser language only (not the app language / sc_lang cookie)
-const t = makeT(BROWSER_UI_LANG)
+import { BROWSER_UI_LANG, makeT, matchBrowserLanguages, nativeName, type TFunc } from '../../i18n'
 
 function formatBytes(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB']
@@ -63,16 +60,16 @@ const scrollBox: CSSProperties = {
   padding: '4px 12px',
 }
 
-const tierLabel = (tier: number | null) => (tier === null ? t('setup.tiers.none') : `T${tier}`)
-
 // onChoose(fix): parent re-runs the pipeline only when fix differs from the applied `fixed`
 function TierStep({
+  t,
   tiers,
   running,
   alerts,
   onBack,
   onChoose,
 }: {
+  t: TFunc
   tiers: SetupResult['tiers']
   running: boolean
   alerts: ReactNode
@@ -83,6 +80,7 @@ function TierStep({
   const byId = new Map((craftable.data ?? []).map((c) => [c.id, c]))
   const fixed = tiers?.fixed ?? false
   const mismatches = tiers?.mismatches ?? []
+  const tierLabel = (tier: number | null) => (tier === null ? t('setup.tiers.none') : `T${tier}`)
 
   if (!mismatches.length) {
     return (
@@ -136,6 +134,9 @@ function TierStep({
 }
 
 export default function SetupPage() {
+  // setup page text: browser language first, switchable here (not the app language / sc_lang cookie)
+  const [uiLang, setUiLang] = useState(BROWSER_UI_LANG)
+  const t = makeT(uiLang)
   const [step, setStep] = useState(0)
   const status = useSetupStatus()
   const runSetup = useRunSetup()
@@ -337,6 +338,7 @@ export default function SetupPage() {
   } else if (step === 2 && result) {
     content = (
       <TierStep
+        t={t}
         tiers={result.tiers}
         running={running}
         alerts={runAlerts}
@@ -483,7 +485,7 @@ export default function SetupPage() {
 
   return (
     // antd built-in texts (modal buttons, copy tooltips...) in the same language as t
-    <ConfigProvider locale={BROWSER_UI_LANG === 'ko' ? koKR : enUS}>
+    <ConfigProvider locale={uiLang === 'ko' ? koKR : enUS}>
       <div style={{ minHeight: '100vh', background: 'var(--bg-app)', padding: '40px 16px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
@@ -491,6 +493,16 @@ export default function SetupPage() {
             <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 16 }}>
               Satisfactory — {t('setup.title')}
             </span>
+            <Select
+              value={uiLang}
+              onChange={setUiLang}
+              size="small"
+              style={{ width: 110, marginLeft: 'auto' }}
+              options={[
+                { value: 'ko', label: '한국어' },
+                { value: 'en-US', label: 'English' },
+              ]}
+            />
           </div>
           <Steps
             current={step}
