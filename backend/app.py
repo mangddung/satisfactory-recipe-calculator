@@ -698,8 +698,8 @@ def api_plans_create():
     return jsonify(plan), 201
 
 
-@app.delete("/api/plans/<plan_id>")
-def api_plans_delete(plan_id: str):
+@app.delete("/api/plans/<uuid:plan_id>")  # uuid 만 허용 → 경로 조작 불가
+def api_plans_delete(plan_id: uuid.UUID):
     path = PLANS_DIR / f"{plan_id}.json"
     if not path.exists():
         abort(404)
