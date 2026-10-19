@@ -11,3 +11,8 @@ frontend/dist
 output
 game-data
 *.md
+.env
+# prod 이미지엔 backend/data/clean 만 (raw·intermediate 는 파이프라인 중간 산출물, plans 는 dev 사용자 데이터)
+backend/data/raw
+backend/data/intermediate
+backend/data/plans
