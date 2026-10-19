@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "38050:5000"
+      - "127.0.0.1:38050:5000"  # admin API·디버거가 켜져 있으므로 이 PC에서만 접속
     volumes:
       - ./backend:/app/backend
       - ./data-pipeline:/app/data-pipeline
@@ -18,7 +18,7 @@ services:
       context: frontend
       dockerfile: Dockerfile.dev
     ports:
-      - "38173:3000"
+      - "127.0.0.1:38173:3000"
     volumes:
       - ./frontend:/app
       - frontend_nm:/app/node_modules

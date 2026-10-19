@@ -723,4 +723,4 @@ def _import_pipeline_module(name: str):
 if __name__ == "__main__":
     logger.info(f"데이터 경로: {DATA_CLEAN}")
     logger.info(f"분류 오버라이드: {CLASSIFICATION_OVERRIDES}")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000)  # debug 는 환경변수 FLASK_DEBUG=1 (dev compose) 일 때만

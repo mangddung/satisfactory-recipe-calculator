@@ -3,8 +3,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    ports:
-      - "5000:5000"
+    # 포트 미개방: nginx(frontend)가 내부 네트워크로 /api/ 를 프록시
     volumes:
       - plans:/app/backend/data/plans
     restart: unless-stopped
