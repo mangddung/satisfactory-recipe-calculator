@@ -122,7 +122,9 @@ export default function CalculatorPage() {
   const [planName, setPlanName] = useState('')
   const [plansModalOpen, setPlansModalOpen] = useState(false)
   const [sidebarSearch, setSidebarSearch] = useState('')
-  const [collapsedTiers, setCollapsedTiers] = useState<Set<number>>(new Set())
+  const [collapsedTiers, setCollapsedTiers] = useState<Set<number>>(
+    () => new Set((getCookie('sc_collapsed_tiers') ?? '').split(',').filter(Boolean).map(Number)),
+  )
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 모바일 전용: 아이템·설정 서랍, 요약 상세(건물·원자재) 펼침
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -212,6 +214,7 @@ export default function CalculatorPage() {
 
   useEffect(() => { setCookie('sc_conveyor', String(conveyorLimitValue)) }, [conveyorLimitValue])
   useEffect(() => { setCookie('sc_extractor', extractorLevel) }, [extractorLevel])
+  useEffect(() => { setCookie('sc_collapsed_tiers', [...collapsedTiers].join(',')) }, [collapsedTiers])
 
   const handleRawSettingsChange = useCallback(
     (pathKey: string, settings: RawNodeSettings) => {
