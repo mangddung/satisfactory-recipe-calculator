@@ -425,10 +425,20 @@ def _automatable_tiers(items: dict, recipes: dict, recipe_sources: dict) -> dict
     return {iid: t for iid, t in tier.items() if iid in items and iid in made and iid not in raw}
 
 
+def _short_icon_path(icon_path: str) -> str:
+    """'FactoryGame/Buildable/Factory/AssemblerMk1/UI/AssemblerMk1_512.png' → 'Factory/AssemblerMk1_512.png'.
+    UI(_UI) 폴더와 아이템 이름 폴더를 빼고 그 위 분류 폴더 하나만 남김."""
+    *dirs, name = icon_path.split('/')
+    if dirs and dirs[-1].lower() in ('ui', '_ui'):
+        dirs.pop()
+    return f'{dirs[-2]}/{name}' if len(dirs) >= 2 else name
+
+
 def extract_icons(clean_dir: str | Path, source_dir: str | Path) -> dict:
-    """source_dir(game-data) 안의 png 중 items/buildings가 참조하는 아이콘만 clean/icons로 복사.
-    원본은 읽기만 한다. FModel 출력 폴더 구조와 무관하게 경로 끝부분으로 매칭
+    """source_dir(game-data) 안의 png 중 items/buildings가 참조하는 아이콘만 clean/icons/<분류>/<파일명> 으로 복사하고
+    iconPath 를 그 경로로 바꿈. 원본은 읽기만 한다. FModel 출력 폴더 구조와 무관하게 경로 끝부분으로 매칭
     (FModel은 /Game/ 을 FactoryGame/Content/ 로 내보내므로 iconPath 앞의 FactoryGame/ 은 비교에서 뺌).
+    못 찾은 아이콘은 iconPath 를 원래 경로로 둠 (초기 설정이 FModel 위치 안내에 씀).
     """
     clean_dir = Path(clean_dir)
     out_dir = clean_dir / 'icons'
@@ -439,16 +449,17 @@ def extract_icons(clean_dir: str | Path, source_dir: str | Path) -> dict:
     for p in Path(source_dir).rglob('*.png'):
         by_name.setdefault(p.name.lower(), []).append(p)
 
-    needed: set[str] = set()
+    data: dict[str, dict] = {}
     for filename in ('items.json', 'buildings.json'):
         filepath = clean_dir / filename
         if filepath.exists():
             with open(filepath, 'r', encoding='utf-8') as f:
-                needed |= {v['iconPath'] for v in json.load(f).values() if v.get('iconPath')}
+                data[filename] = json.load(f)
+    needed = {v['iconPath'] for d in data.values() for v in d.values() if v.get('iconPath')}
 
-    copied = 0
     missing = []
-    sources = []
+    renamed: dict[str, str] = {}  # 원래 iconPath → clean/icons 기준 경로
+    taken: set[str] = set()
     for icon_path in sorted(needed):
         tail = '/' + icon_path.split('/', 1)[-1].lower()
         src = next(
@@ -458,14 +469,25 @@ def extract_icons(clean_dir: str | Path, source_dir: str | Path) -> dict:
         if src is None:
             missing.append(icon_path)
             continue
-        dest = out_dir / icon_path
+        short = _short_icon_path(icon_path)
+        if short.lower() in taken:  # 다른 폴더에 같은 분류·파일명 → 덮어쓰지 않게 원래 경로 유지
+            short = icon_path
+        taken.add(short.lower())
+        dest = out_dir / short
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
-        copied += 1
-        sources.append(src)
+        renamed[icon_path] = short
 
+    for filename, d in data.items():
+        for v in d.values():
+            if v.get('iconPath') in renamed:
+                v['iconPath'] = renamed[v['iconPath']]
+        with open(clean_dir / filename, 'w', encoding='utf-8') as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+
+    copied = len(renamed)
     logger.info(f"아이콘 추출: 필요 {len(needed)}개 중 {copied}개 복사, {len(missing)}개 없음")
-    return {'needed': len(needed), 'copied': copied, 'missing': missing, 'sources': sources}
+    return {'needed': len(needed), 'copied': copied, 'missing': missing}
 
 
 def enrich_item_tiers(clean_dir: str | Path, docs_json_path: str | Path | None, fix: bool = False) -> dict:

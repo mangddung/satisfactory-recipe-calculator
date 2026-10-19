@@ -1,6 +1,6 @@
-"""자동화 가능 티어 계산 확인. 게임 데이터 없이 실행: python data-pipeline/test_merge.py"""
+"""자동화 가능 티어 계산·아이콘 경로 정리 확인. 게임 데이터 없이 실행: python data-pipeline/test_merge.py"""
 
-from merge import _automatable_tiers
+from merge import _automatable_tiers, _short_icon_path
 
 
 def _recipe(products, ingredients=(), recipe_type='production', produced_in=(), byproducts=()):
@@ -32,6 +32,13 @@ def test_automatable_tiers():
     assert _automatable_tiers(items, recipes, sources) == {'Ingot': 0, 'Pipe': 3, 'Resin': 3, 'Sam': 1, 'Fluct': 5}
 
 
+def test_short_icon_path():
+    assert _short_icon_path('FactoryGame/Buildable/Factory/AssemblerMk1/UI/AssemblerMk1_512.png') == 'Factory/AssemblerMk1_512.png'
+    assert _short_icon_path('FactoryGame/Resource/Parts/AIExpansion/_UI/IconDesc_AIExpension_256.png') == 'Parts/IconDesc_AIExpension_256.png'
+    assert _short_icon_path('FactoryGame/Resource/Parts/GenericBiomass/IconDesc_Leaves_256.png') == 'Parts/IconDesc_Leaves_256.png'
+
+
 if __name__ == '__main__':
     test_automatable_tiers()
+    test_short_icon_path()
     print('ok')
