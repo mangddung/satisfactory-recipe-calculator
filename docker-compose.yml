@@ -11,6 +11,7 @@ services:
       - ./game-data:/app/game-data
     environment:
       FLASK_DEBUG: "1"
+      ENABLE_ADMIN: "1"
 
   frontend:
     build:

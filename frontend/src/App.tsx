@@ -1,15 +1,17 @@
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfigProvider, Spin, theme } from 'antd'
 import koKR from 'antd/locale/ko_KR'
 import enUS from 'antd/locale/en_US'
-import AdminPage from './pages/admin/AdminPage'
 import CalculatorPage from './pages/calculator/CalculatorPage'
 import SetupPage from './pages/setup/SetupPage'
 import LangProvider from './i18n/LangProvider'
 import { useLang } from './i18n'
 import { useSetupStatus } from './api/setup'
+
+// admin is dev-server only: in `npm run build` this branch is dropped, so admin code never reaches the bundle
+const AdminPage = import.meta.env.DEV ? lazy(() => import('./pages/admin/AdminPage')) : null
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 1000 * 60 } },
@@ -47,7 +49,7 @@ function LocalizedApp() {
         <SetupGate>
           <Routes>
             <Route path="/" element={<CalculatorPage />} />
-            <Route path="/admin/*" element={<AdminPage />} />
+            {AdminPage && <Route path="/admin/*" element={<Suspense><AdminPage /></Suspense>} />}
             <Route path="/setup" element={<SetupPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

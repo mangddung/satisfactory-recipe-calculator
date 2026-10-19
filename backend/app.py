@@ -2,7 +2,7 @@
 """
 Flask 서버
 
-관리자 API:
+관리자 API (환경변수 ENABLE_ADMIN=1 일 때만, 아니면 404):
   GET  /api/admin/items?filter=unclassified
   GET  /api/admin/recipes
   GET  /api/admin/buildings
@@ -105,6 +105,15 @@ VALID_ACQUISITIONS = [
 ]
 
 app = Flask(__name__)
+
+# 관리자 API 는 dev 전용 (docker-compose.yml 에서 켬). 기본은 꺼짐 → prod 에선 404
+ADMIN_ENABLED = os.environ.get("ENABLE_ADMIN") == "1"
+
+
+@app.before_request
+def _admin_guard():
+    if not ADMIN_ENABLED and request.path.startswith("/api/admin/"):
+        abort(404)
 
 
 # ── 데이터 로딩 헬퍼 ──────────────────────────────────────────────────
@@ -264,7 +273,7 @@ def api_item_detail(item_id: str):
     })
 
 
-@app.get("/api/admin/icons/<path:icon_path>")
+@app.get("/api/icons/<path:icon_path>")
 def api_icon(icon_path: str):
     """파이프라인이 추출한 아이콘 PNG 서빙 (ICONS_DIR/<iconPath>)."""
     candidate = (ICONS_DIR / icon_path).resolve()

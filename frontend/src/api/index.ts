@@ -6,7 +6,7 @@ export function setApiLang(lang: string) {
 
 export function getIconUrl(iconPath: string | null): string | undefined {
   if (!iconPath) return undefined
-  return `/api/admin/icons/${iconPath}`
+  return `/api/icons/${iconPath}`
 }
 
 // thrown on non-2xx; body = parsed JSON error response (null if not JSON)
