@@ -33,6 +33,7 @@ const en: Record<keyof typeof ko, string> = {
   'calc.targetRate': 'Output',
   'calc.totalPower': 'Total power',
   'calc.rawResources': 'Raw resources (per min)',
+  'calc.usedIn': 'Used in recipes',
   'calc.loadingRecipes': 'Loading recipe data...',
   'calc.calculating': 'Calculating...',
   'calc.savePlan': 'Save plan',

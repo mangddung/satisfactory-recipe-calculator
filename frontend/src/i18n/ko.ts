@@ -33,6 +33,7 @@ const ko = {
   'calc.targetRate': '생산량',
   'calc.totalPower': '총 전력',
   'calc.rawResources': '원자재 (분당)',
+  'calc.usedIn': '이 아이템을 쓰는 레시피',
   'calc.loadingRecipes': '레시피 데이터 로딩 중...',
   'calc.calculating': '계산 중...',
   'calc.savePlan': '플랜 저장',

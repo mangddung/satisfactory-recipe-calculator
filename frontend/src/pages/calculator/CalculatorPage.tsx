@@ -322,6 +322,15 @@ export default function CalculatorPage() {
       .sort((a, b) => b.count - a.count)
   }, [result, buildingMap])
 
+  // 선택한 아이템을 재료로 쓰는 생산 레시피
+  const usedInRecipes = useMemo(
+    () =>
+      recipes.filter(
+        (r) => r.recipeType === 'production' && r.ingredients.some((i) => i.item === selectedItemId),
+      ),
+    [recipes, selectedItemId],
+  )
+
   const displayPowerMW = result ? result.totalPowerMW : 0
 
   const displayResources = useMemo(() => {
@@ -566,6 +575,31 @@ export default function CalculatorPage() {
                         </div>
                       ))}
                     </div>
+
+                    {usedInRecipes.length > 0 && (
+                      <>
+                        <Divider style={{ borderColor: 'var(--border)', margin: '10px 0' }} />
+
+                        <div className={styles.rawLabel}>{t('calc.usedIn')}</div>
+                        <div className={styles.summaryList}>
+                          {usedInRecipes.map((r) => {
+                            const productId = r.products[0]?.item
+                            // 결과물이 계산 가능한 아이템일 때만 이동 (포장 해제로 나오는 원자재 등은 제외)
+                            const canSelect = craftable.some((c) => c.id === productId)
+                            return (
+                              <div
+                                key={r.id}
+                                className={`${styles.summaryRow} ${canSelect ? styles.summaryRowClickable : ''}`}
+                                onClick={canSelect ? () => handleItemSelect(productId) : undefined}
+                              >
+                                <ItemIcon iconPath={itemMap[productId]?.iconPath ?? null} size={32} />
+                                <span className={styles.summaryRowName}>{r.displayName}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </>
               )}

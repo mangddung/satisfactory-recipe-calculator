@@ -332,6 +332,14 @@
   font-size: 14px;
 }
 
+.summaryRowClickable {
+  cursor: pointer;
+}
+
+.summaryRowClickable:hover {
+  background: var(--bg-hover);
+}
+
 .summaryRowName {
   flex: 1;
   color: var(--text-secondary);
